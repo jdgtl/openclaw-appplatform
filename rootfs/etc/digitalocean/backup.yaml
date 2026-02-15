@@ -31,9 +31,13 @@ paths:
       - "*.lock"
       - "*.pid"
       - "*.sock"
+      - ".nvm"
+      - ".local"
+      - ".cache"
+      - ".npm"
 
 # Global settings
-backup_interval_seconds: 30 # 30 seconds
+backup_interval_seconds: 300 # 5 minutes
 prune_interval_seconds: 3600 # 1 hour
 
 # Retention policy (for restic forget)
