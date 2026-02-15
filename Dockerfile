@@ -104,10 +104,13 @@ RUN useradd -m -s /bin/bash openclaw \
 # Create pnpm directory (nvm/pnpm paths are set in openclaw user's .bashrc, not globally)
 RUN mkdir -p /home/openclaw/.local/share/pnpm && chown -R openclaw:openclaw /home/openclaw/.local
 
+# Create Homebrew directory (must be done as root before switching to openclaw user)
+RUN mkdir -p /home/linuxbrew/.linuxbrew && chown -R openclaw:openclaw /home/linuxbrew
+
 USER openclaw
 
 # Install Homebrew (Linuxbrew) - must be done as non-root user
-RUN NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
+RUN NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
 # Install nvm, Node.js LTS, pnpm, and openclaw
 RUN export SHELL=/bin/bash  && export NVM_DIR="$HOME/.nvm" \
