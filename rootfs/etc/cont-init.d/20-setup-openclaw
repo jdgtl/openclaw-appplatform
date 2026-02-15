@@ -82,14 +82,18 @@ fi
 persist_env_var OPENCLAW_ OPENCLAW_GATEWAY_TOKEN="$OPENCLAW_GATEWAY_TOKEN"
 echo "[generate-config] Gateway token configured (OPENCLAW_GATEWAY_TOKEN)"
 
-# Start with default config as base
-if [ -f "$DEFAULT_CONFIG" ]; then
-  cp "$DEFAULT_CONFIG" "$CONFIG_FILE"
-  echo "[generate-config] Using default config from $DEFAULT_CONFIG"
+# Use existing config if restored from backup, otherwise start from default
+if [ -f "$CONFIG_FILE" ] && [ -s "$CONFIG_FILE" ]; then
+  echo "[generate-config] Using existing config (restored from backup)"
 else
-  # Fallback minimal config if default doesn't exist
-  echo '{"gateway": {"mode": "local"}}' > "$CONFIG_FILE"
-  echo "[generate-config] Warning: Default config not found, using minimal config"
+  if [ -f "$DEFAULT_CONFIG" ]; then
+    cp "$DEFAULT_CONFIG" "$CONFIG_FILE"
+    echo "[generate-config] Using default config from $DEFAULT_CONFIG"
+  else
+    # Fallback minimal config if default doesn't exist
+    echo '{"gateway": {"mode": "local"}}' > "$CONFIG_FILE"
+    echo "[generate-config] Warning: Default config not found, using minimal config"
+  fi
 fi
 
 # Handle ENABLE_UI flag - disable Control UI if set to false
