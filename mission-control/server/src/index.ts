@@ -9,9 +9,9 @@ import { sessionsRouter } from "./routes/sessions.js";
 import { cronRouter } from "./routes/cron.js";
 import { systemRouter } from "./routes/system.js";
 
-const port = parseInt(process.env.MC_PORT ?? "3333", 10);
-const gatewayPort = process.env.GATEWAY_PORT ?? "18789";
-const gatewayToken = process.env.OPENCLAW_GATEWAY_TOKEN ?? "";
+const port = parseInt(process.env.MC_PORT || "3333", 10);
+const gatewayPort = process.env.GATEWAY_PORT || "18789";
+const gatewayToken = process.env.OPENCLAW_GATEWAY_TOKEN || "";
 
 if (!gatewayToken) {
   console.warn("[mission-control] WARNING: OPENCLAW_GATEWAY_TOKEN not set — gateway calls will fail");

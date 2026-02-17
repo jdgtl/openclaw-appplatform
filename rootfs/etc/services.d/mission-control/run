@@ -1,6 +1,9 @@
 #!/bin/bash
 # Mission Control dashboard (enabled via MC_ENABLE=true)
 source /etc/s6-overlay/lib/env-utils.sh
+
+# Read MC_ vars as root (99999-apply-permissions resets MC_ files to root:root 0600,
+# so the openclaw user can't read them — we must source them here while still root)
 source_env_prefix MC_
 
 if [ "${MC_ENABLE:-false}" != "true" ]; then
@@ -16,4 +19,12 @@ if [ "${TAILSCALE_ENABLE:-false}" = "true" ] && command -v tailscale >/dev/null 
 fi
 
 echo "[mission-control] Starting on port ${MC_PORT:-3333}..."
-with_env_prefix --user openclaw MC_ -- node /opt/mission-control/server/dist/index.js
+
+# Export vars explicitly (sourced as root above) then drop to openclaw user
+export MC_PORT="${MC_PORT:-3333}"
+export MC_ENABLE="${MC_ENABLE}"
+export OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN}"
+export OPENCLAW_STATE_DIR="${OPENCLAW_STATE_DIR:-/data/.openclaw}"
+export OPENCLAW_WORKSPACE_DIR="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
+export GATEWAY_PORT="${GATEWAY_PORT:-18789}"
+exec /command/s6-setuidgid openclaw node /opt/mission-control/server/dist/index.js
