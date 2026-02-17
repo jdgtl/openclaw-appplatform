@@ -19,4 +19,11 @@ persist_env_var MC_ \
   OPENCLAW_WORKSPACE_DIR="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}" \
   TAILSCALE_ENABLE="${TAILSCALE_ENABLE:-false}"
 
+# Fix permissions so openclaw user can read MC_ env vars
+# (must be done here because 99999-apply-permissions glob ordering
+# may not override the root:root 0600 set by the /**/* rule)
+chown -R openclaw:openclaw /run/s6/container_environment/MC_
+chmod 755 /run/s6/container_environment/MC_
+chmod 644 /run/s6/container_environment/MC_/*
+
 echo "[mission-control] Setup complete (port ${MC_PORT:-3333}, token=${OPENCLAW_GATEWAY_TOKEN:+set})"
