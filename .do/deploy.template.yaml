@@ -65,6 +65,17 @@ spec:
           scope: RUN_TIME
           type: SECRET
 
+        # Slack channel config
+        - key: SLACK_ENABLE
+          scope: RUN_TIME
+          value: "false"
+        - key: SLACK_BOT_TOKEN
+          scope: RUN_TIME
+          type: SECRET
+        - key: SLACK_APP_TOKEN
+          scope: RUN_TIME
+          type: SECRET
+
         # Optional
         - key: OPENCLAW_GATEWAY_TOKEN
           scope: RUN_TIME

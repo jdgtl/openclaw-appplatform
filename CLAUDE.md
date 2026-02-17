@@ -77,7 +77,7 @@ Optional DO Spaces backup via [Restic](https://restic.net/) when `ENABLE_SPACES=
 **How it works:**
 
 - Incremental, encrypted snapshots to DigitalOcean Spaces (S3-compatible)
-- Backup runs every 30s; prune runs hourly
+- Backup runs every 5 min; prune runs hourly
 - `10-restore-state` restores latest snapshots on container start
 
 **What gets backed up:** `/etc`, `/root`, `/data/.openclaw`, `/data/tailscale`, `/home`

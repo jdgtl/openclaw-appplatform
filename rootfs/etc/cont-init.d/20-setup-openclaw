@@ -9,6 +9,9 @@ source_env_prefix OPENCLAW_
 persist_env_var OPENCLAW_ \
   GRADIENT_API_KEY=change-me \
   TAILSCALE_ENABLE="${TAILSCALE_ENABLE:-false}" \
+  SLACK_ENABLE="${SLACK_ENABLE:-false}" \
+  SLACK_BOT_TOKEN="${SLACK_BOT_TOKEN}" \
+  SLACK_APP_TOKEN="${SLACK_APP_TOKEN}" \
   TS_SOCKET="${TS_SOCKET}" \
   TS_EXTRA_ARGS="${TS_EXTRA_ARGS}" \
   TS_HOSTNAME="${TS_HOSTNAME}" \
@@ -96,6 +99,20 @@ else
   fi
 fi
 
+# OpenClaw strips managed sections (channels, commands, plugins, meta) from
+# openclaw.json after loading them into internal state. The .bak file created
+# by OpenClaw preserves the full config before stripping. Merge any sections
+# from .bak that are missing in the stripped config so they survive deploys.
+if [ -f "${CONFIG_FILE}.bak" ] && [ -s "${CONFIG_FILE}.bak" ]; then
+  BAK_KEYS=$(jq -r 'keys | length' "${CONFIG_FILE}.bak" 2>/dev/null || echo 0)
+  MAIN_KEYS=$(jq -r 'keys | length' "$CONFIG_FILE" 2>/dev/null || echo 0)
+  if [ "$BAK_KEYS" -gt "$MAIN_KEYS" ]; then
+    echo "[generate-config] Merging stripped sections from .bak ($BAK_KEYS keys) into config ($MAIN_KEYS keys)"
+    # .bak as base, main config overlaid on top (main config wins for shared keys)
+    jq -s '.[0] * .[1]' "${CONFIG_FILE}.bak" "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+  fi
+fi
+
 # Handle ENABLE_UI flag - disable Control UI if set to false
 if [ "${ENABLE_UI:-true}" = "false" ]; then
   echo "[generate-config] Disabling Control UI (ENABLE_UI=false)"
@@ -106,6 +123,18 @@ fi
 if [ "${TAILSCALE_ENABLE:-false}" = "true" ]; then
   echo "[generate-config] Adding Tailscale serve config"
   jq '.gateway.tailscale.resetOnExit = true | .gateway.tailscale.mode = "serve" | .gateway.auth.allowTailscale = true' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+fi
+
+# Add Slack channel config when enabled
+if [ "${SLACK_ENABLE:-false}" = "true" ]; then
+  if [ -n "$SLACK_BOT_TOKEN" ] && [ -n "$SLACK_APP_TOKEN" ]; then
+    echo "[generate-config] Adding Slack channel config (socket mode)"
+    jq --arg botToken "$SLACK_BOT_TOKEN" --arg appToken "$SLACK_APP_TOKEN" \
+      '.plugins.entries.slack.enabled = true | .channels.slack.mode = "socket" | .channels.slack.botToken = $botToken | .channels.slack.appToken = $appToken | .channels.slack.dmPolicy = "pairing" | .channels.slack.groupPolicy = "allowlist"' \
+      "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+  else
+    echo "[generate-config] WARNING: SLACK_ENABLE=true but SLACK_BOT_TOKEN or SLACK_APP_TOKEN not set"
+  fi
 fi
 
 # Add gateway auth token to config

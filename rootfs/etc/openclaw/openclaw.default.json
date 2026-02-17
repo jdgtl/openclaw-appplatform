@@ -20,6 +20,9 @@
             },
             "discord": {
                 "enabled": true
+            },
+            "slack": {
+                "enabled": false
             }
         }
     },
