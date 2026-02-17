@@ -1,5 +1,22 @@
 FROM tailscale/tailscale:stable AS tailscale
 
+# Stage: Build Mission Control frontend
+FROM node:22-slim AS mc-frontend
+WORKDIR /app
+COPY mission-control/frontend/package*.json ./
+RUN npm ci
+COPY mission-control/frontend/ ./
+RUN npm run build
+
+# Stage: Build Mission Control server
+FROM node:22-slim AS mc-server
+WORKDIR /app
+COPY mission-control/server/package*.json ./
+RUN npm ci
+COPY mission-control/server/ ./
+RUN npx tsc
+RUN npm prune --production
+
 FROM ubuntu:noble
 
 # Use bash for the shell
@@ -134,6 +151,12 @@ RUN if [ -d /home/ubuntu ]; then chown -R ubuntu:ubuntu /home/ubuntu; fi
 # Generate initial package selections list (for restore capability)
 RUN dpkg --get-selections > /etc/openclaw/dpkg-selections
 
+# Install Mission Control
+COPY --from=mc-frontend /app/dist /opt/mission-control/frontend/dist
+COPY --from=mc-server /app/dist /opt/mission-control/server/dist
+COPY --from=mc-server /app/node_modules /opt/mission-control/server/node_modules
+COPY --from=mc-server /app/package.json /opt/mission-control/server/package.json
+RUN chown -R openclaw:openclaw /opt/mission-control
 
 # s6-overlay init (must run as root, services drop privileges as needed)
 ENTRYPOINT ["/init"]

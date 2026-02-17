@@ -1,0 +1,18 @@
+#!/command/with-contenv bash
+# Setup Mission Control environment
+source /etc/s6-overlay/lib/env-utils.sh
+
+if [ "${MC_ENABLE:-false}" != "true" ]; then
+  echo "[mission-control] Disabled, skipping setup"
+  exit 0
+fi
+
+# Persist MC vars + gateway token (MC service needs both)
+persist_env_var MC_ \
+  MC_ENABLE="${MC_ENABLE}" \
+  MC_PORT="${MC_PORT:-3333}" \
+  OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN}" \
+  OPENCLAW_STATE_DIR="${OPENCLAW_STATE_DIR:-/data/.openclaw}" \
+  OPENCLAW_WORKSPACE_DIR="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
+
+echo "[mission-control] Setup complete (port ${MC_PORT:-3333})"

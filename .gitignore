@@ -22,3 +22,8 @@ Thuopenclaws.db
 # Temp files
 /tmp/
 *.tmp
+
+# Mission Control build artifacts
+mission-control/*/node_modules/
+mission-control/*/dist/
+mission-control/server/dist/

@@ -86,6 +86,14 @@ spec:
           scope: RUN_TIME
           type: SECRET
 
+        # Mission Control dashboard
+        - key: MC_ENABLE
+          scope: RUN_TIME
+          value: "false"
+        - key: MC_PORT
+          scope: RUN_TIME
+          value: "3333"
+
         # Optional
         - key: OPENCLAW_GATEWAY_TOKEN
           scope: RUN_TIME

@@ -132,6 +132,22 @@ permissions:
     group: root
     mode: "0755"
 
+  # MC_ env directory and files readable by openclaw user
+  - path: /run/s6/container_environment/MC_
+    user: openclaw
+    group: openclaw
+    mode: "0755"
+  - path: /run/s6/container_environment/MC_/*
+    user: openclaw
+    group: openclaw
+    mode: "0644"
+
+  # Mission Control application
+  - path: /opt/mission-control
+    user: openclaw
+    group: openclaw
+    mode: "0755"
+
   # User SSH directories
   - path: /home/ubuntu/.ssh
     user: ubuntu

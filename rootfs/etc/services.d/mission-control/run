@@ -1,0 +1,19 @@
+#!/bin/bash
+# Mission Control dashboard (enabled via MC_ENABLE=true)
+source /etc/s6-overlay/lib/env-utils.sh
+source_env_prefix MC_
+
+if [ "${MC_ENABLE:-false}" != "true" ]; then
+  echo "[mission-control] Disabled (set MC_ENABLE=true to enable)"
+  s6-svc -Od .
+  exit 0
+fi
+
+# Configure Tailscale Serve for HTTPS access (if Tailscale is running)
+if [ "${TAILSCALE_ENABLE:-false}" = "true" ] && command -v tailscale >/dev/null 2>&1; then
+  MC_PORT="${MC_PORT:-3333}"
+  tailscale serve --bg --https="$MC_PORT" "http://127.0.0.1:$MC_PORT" 2>/dev/null || true
+fi
+
+echo "[mission-control] Starting on port ${MC_PORT:-3333}..."
+with_env_prefix --user openclaw MC_ -- node /opt/mission-control/server/dist/index.js
