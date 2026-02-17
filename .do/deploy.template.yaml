@@ -76,6 +76,11 @@ spec:
           scope: RUN_TIME
           type: SECRET
 
+        # Web search (Brave free tier: 2000 queries/month)
+        - key: BRAVE_API_KEY
+          scope: RUN_TIME
+          type: SECRET
+
         # Optional
         - key: OPENCLAW_GATEWAY_TOKEN
           scope: RUN_TIME
