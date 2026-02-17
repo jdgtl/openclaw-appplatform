@@ -20,7 +20,12 @@ fi
 
 echo "[mission-control] Starting on port ${MC_PORT:-3333}..."
 
-# with-contenv already loaded env vars; pass them through to node via s6-setuidgid
-export MC_PORT="${MC_PORT:-3333}"
-export GATEWAY_PORT="${GATEWAY_PORT:-18789}"
-exec /command/s6-setuidgid openclaw node /opt/mission-control/server/dist/index.js
+# Use runuser -l to get openclaw's login shell (loads nvm/PATH for node).
+# Pass env vars explicitly since runuser -l starts a clean environment.
+exec runuser -l openclaw -c "\
+  export MC_PORT='${MC_PORT:-3333}' \
+  GATEWAY_PORT='${GATEWAY_PORT:-18789}' \
+  OPENCLAW_GATEWAY_TOKEN='${OPENCLAW_GATEWAY_TOKEN}' \
+  OPENCLAW_STATE_DIR='${OPENCLAW_STATE_DIR:-/data/.openclaw}' \
+  OPENCLAW_WORKSPACE_DIR='${OPENCLAW_WORKSPACE_DIR:-/data/workspace}'; \
+  exec node /opt/mission-control/server/dist/index.js" 2>&1
