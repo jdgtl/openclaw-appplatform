@@ -81,6 +81,11 @@ spec:
           scope: RUN_TIME
           type: SECRET
 
+        # GOG (Google OAuth Gateway) keyring encryption
+        - key: GOG_KEYRING_PASSWORD
+          scope: RUN_TIME
+          type: SECRET
+
         # Optional
         - key: OPENCLAW_GATEWAY_TOKEN
           scope: RUN_TIME
