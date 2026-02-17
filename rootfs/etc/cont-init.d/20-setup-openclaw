@@ -130,7 +130,7 @@ if [ "${SLACK_ENABLE:-false}" = "true" ]; then
   if [ -n "$SLACK_BOT_TOKEN" ] && [ -n "$SLACK_APP_TOKEN" ]; then
     echo "[generate-config] Adding Slack channel config (socket mode)"
     jq --arg botToken "$SLACK_BOT_TOKEN" --arg appToken "$SLACK_APP_TOKEN" \
-      '.plugins.entries.slack.enabled = true | .channels.slack.mode = "socket" | .channels.slack.botToken = $botToken | .channels.slack.appToken = $appToken | .channels.slack.dmPolicy = "pairing" | .channels.slack.groupPolicy = "allowlist"' \
+      '.plugins.entries.slack.enabled = true | .channels.slack.mode = "socket" | .channels.slack.botToken = $botToken | .channels.slack.appToken = $appToken | .channels.slack.dmPolicy = "pairing" | .channels.slack.groupPolicy = "allowlist" | .channels.slack.replyToMode = "off"' \
       "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
   else
     echo "[generate-config] WARNING: SLACK_ENABLE=true but SLACK_BOT_TOKEN or SLACK_APP_TOKEN not set"
