@@ -39,7 +39,8 @@ const frontendDir = join(__dirname, "..", "..", "frontend", "dist");
 app.use(express.static(frontendDir));
 
 // SPA fallback — serve index.html for all non-API routes
-app.get("*", (_req, res) => {
+// Express 5 requires named wildcard params
+app.get("/{*path}", (_req, res) => {
   res.sendFile(join(frontendDir, "index.html"));
 });
 

@@ -7,12 +7,16 @@ if [ "${MC_ENABLE:-false}" != "true" ]; then
   exit 0
 fi
 
+# Load OPENCLAW_ vars (gateway token is persisted there by 20-setup-openclaw)
+source_env_prefix OPENCLAW_
+
 # Persist MC vars + gateway token (MC service needs both)
 persist_env_var MC_ \
   MC_ENABLE="${MC_ENABLE}" \
   MC_PORT="${MC_PORT:-3333}" \
   OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN}" \
   OPENCLAW_STATE_DIR="${OPENCLAW_STATE_DIR:-/data/.openclaw}" \
-  OPENCLAW_WORKSPACE_DIR="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
+  OPENCLAW_WORKSPACE_DIR="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}" \
+  TAILSCALE_ENABLE="${TAILSCALE_ENABLE:-false}"
 
-echo "[mission-control] Setup complete (port ${MC_PORT:-3333})"
+echo "[mission-control] Setup complete (port ${MC_PORT:-3333}, token=${OPENCLAW_GATEWAY_TOKEN:+set})"
