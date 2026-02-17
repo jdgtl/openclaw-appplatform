@@ -8,6 +8,7 @@ source_env_prefix OPENCLAW_
 # OpenClaw requires any env vars consumed in config to exist or else it fails to start.
 persist_env_var OPENCLAW_ \
   GRADIENT_API_KEY=change-me \
+  BRAVE_API_KEY="${BRAVE_API_KEY}" \
   TAILSCALE_ENABLE="${TAILSCALE_ENABLE:-false}" \
   SLACK_ENABLE="${SLACK_ENABLE:-false}" \
   SLACK_BOT_TOKEN="${SLACK_BOT_TOKEN}" \
