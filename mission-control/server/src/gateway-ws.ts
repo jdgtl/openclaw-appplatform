@@ -74,7 +74,10 @@ export class GatewayWS {
   async connect(): Promise<void> {
     if (this.connected) return;
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(this.url);
+      // Set origin to the gateway's own address so it passes origin checks
+      const ws = new WebSocket(this.url, {
+        origin: this.url.replace("ws://", "http://").replace("wss://", "https://"),
+      });
       this.ws = ws;
 
       const timeout = setTimeout(() => {

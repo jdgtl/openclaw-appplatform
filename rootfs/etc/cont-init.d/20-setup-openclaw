@@ -141,7 +141,7 @@ fi
 
 # Add gateway auth token and trust localhost proxy (Mission Control)
 echo "[generate-config] Adding gateway.auth.token to config"
-jq --arg token "$OPENCLAW_GATEWAY_TOKEN" '.gateway.auth.token = $token | .gateway.auth.mode = "token" | .gateway.trustedProxies = ["127.0.0.1"]' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+jq --arg token "$OPENCLAW_GATEWAY_TOKEN" '.gateway.auth.token = $token | .gateway.auth.mode = "token" | .gateway.trustedProxies = ["127.0.0.1"] | .gateway.controlUi.allowedOrigins = ["http://127.0.0.1:3333"]' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
 
 # Permissions applied via /etc/digitalocean/permissions.yaml
 
