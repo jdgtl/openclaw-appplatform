@@ -66,8 +66,9 @@ export function Chat() {
     sseReset();
     setHistoryLoading(true);
     try {
+      // Use WS-based chat.history via the chat route (not file-based sessions route)
       const data = await fetchJSON<{ messages: HistoryMessage[] }>(
-        `/sessions/${key}/history`,
+        `/chat/history?sessionKey=${encodeURIComponent(key)}`,
       );
       setHistory(data.messages ?? []);
     } catch {
