@@ -21,7 +21,7 @@ interface StatusData {
     status: string;
     version: string | null;
   };
-  sessions: { sessions?: { key: string }[] } | null;
+  sessions: { count?: number; sessions?: { key: string }[] } | null;
   heartbeat: {
     lastRun?: string;
     nextRun?: string;

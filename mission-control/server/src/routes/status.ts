@@ -28,31 +28,41 @@ export function statusRouter(gateway: GatewayClient): Router {
     }
 
     // Fetch all data concurrently, tolerate individual failures
-    const [name, config, heartbeat, activity, sessions, health] =
+    // Note: skip gateway.getStatus() — /health hangs (WebSocket-only gateway)
+    const [name, config, heartbeat, activity, sessionsResult] =
       await Promise.allSettled([
         readIdentityName(),
         readConfig(),
         readHeartbeat(),
         readRecentActivity(3),
         gateway.invokeTool("sessions_list"),
-        gateway.getStatus(),
       ]);
 
     const configVal =
       config.status === "fulfilled" ? config.value : null;
 
+    // Unwrap sessions from tool invoke result:
+    // Raw: { ok: true, result: { details: { count, sessions } } }
+    const sessionsRaw =
+      sessionsResult.status === "fulfilled" ? sessionsResult.value : null;
+    const sessionsData = unwrapToolResult(sessionsRaw);
+
+    // Derive agent status from whether the gateway responded to tool calls
+    const gatewayAlive = sessionsResult.status === "fulfilled";
+
+    // Extract agent name from config or IDENTITY.md
+    const agentName =
+      (name.status === "fulfilled" && name.value) ||
+      extractAgentName(configVal) ||
+      null;
+
     const data = {
       agent: {
-        name:
-          name.status === "fulfilled" ? name.value : "Unknown",
-        status: health.status === "fulfilled" ? "active" : "error",
-        version:
-          health.status === "fulfilled"
-            ? (health.value as { version: string }).version
-            : null,
+        name: agentName,
+        status: gatewayAlive ? "active" : "error",
+        version: null,
       },
-      sessions:
-        sessions.status === "fulfilled" ? sessions.value : null,
+      sessions: sessionsData,
       heartbeat:
         heartbeat.status === "fulfilled" ? heartbeat.value : null,
       channels: configVal
@@ -71,6 +81,30 @@ export function statusRouter(gateway: GatewayClient): Router {
   });
 
   return router;
+}
+
+// Unwrap the nested tool invoke response to get the actual data
+function unwrapToolResult(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object") return raw;
+  const obj = raw as Record<string, unknown>;
+  // Tool results come as { ok, result: { content, details } }
+  const result = obj.result as Record<string, unknown> | undefined;
+  if (result?.details) return result.details;
+  // Or just { content: [{ text: "json..." }] }
+  if (result?.content && Array.isArray(result.content)) {
+    const text = (result.content[0] as Record<string, string>)?.text;
+    if (text) {
+      try { return JSON.parse(text); } catch { /* ignore */ }
+    }
+  }
+  return raw;
+}
+
+function extractAgentName(config: Record<string, unknown> | null): string | null {
+  if (!config) return null;
+  const agents = config.agents as Record<string, unknown> | undefined;
+  const defaults = agents?.defaults as Record<string, unknown> | undefined;
+  return (defaults?.name as string) ?? null;
 }
 
 function extractChannels(

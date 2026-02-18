@@ -2,14 +2,29 @@ import { Router } from "express";
 import { readFile } from "node:fs/promises";
 import type { GatewayClient } from "../gateway.js";
 
+// Unwrap the nested tool invoke response to get the actual data
+function unwrapToolResult(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object") return raw;
+  const obj = raw as Record<string, unknown>;
+  const result = obj.result as Record<string, unknown> | undefined;
+  if (result?.details) return result.details;
+  if (result?.content && Array.isArray(result.content)) {
+    const text = (result.content[0] as Record<string, string>)?.text;
+    if (text) {
+      try { return JSON.parse(text); } catch { /* ignore */ }
+    }
+  }
+  return raw;
+}
+
 export function sessionsRouter(gateway: GatewayClient): Router {
   const router = Router();
 
   // List all sessions
   router.get("/", async (_req, res) => {
     try {
-      const result = await gateway.invokeTool("sessions_list");
-      res.json(result);
+      const raw = await gateway.invokeTool("sessions_list");
+      res.json(unwrapToolResult(raw));
     } catch (err) {
       res.status(502).json({
         error: err instanceof Error ? err.message : "Failed to list sessions",
@@ -20,7 +35,8 @@ export function sessionsRouter(gateway: GatewayClient): Router {
   // Get session history
   router.get("/:key/history", async (req, res) => {
     try {
-      const sessions = (await gateway.invokeTool("sessions_list")) as {
+      const raw = await gateway.invokeTool("sessions_list");
+      const sessions = unwrapToolResult(raw) as {
         sessions?: { key: string; transcriptPath?: string }[];
       };
 
@@ -33,11 +49,11 @@ export function sessionsRouter(gateway: GatewayClient): Router {
         return;
       }
 
-      const raw = await readFile(session.transcriptPath, "utf-8");
-      const lines = raw
+      const transcript = await readFile(session.transcriptPath, "utf-8");
+      const lines = transcript
         .trim()
         .split("\n")
-        .map((line) => {
+        .map((line: string) => {
           try {
             return JSON.parse(line);
           } catch {
