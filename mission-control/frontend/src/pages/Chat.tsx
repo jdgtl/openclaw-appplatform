@@ -2,21 +2,21 @@ import { useState, useRef, useEffect } from "react";
 import { PageShell } from "../components/PageShell.js";
 import { GlassCard } from "../components/GlassCard.js";
 import { usePolling, useSSEChat } from "../lib/hooks.js";
-import { fetchJSON, postJSON } from "../lib/api.js";
+import { fetchJSON } from "../lib/api.js";
 import {
   Search,
   Send,
   Loader2,
   MessageSquare,
   ChevronRight,
+  Plus,
 } from "lucide-react";
 
 interface Session {
   key: string;
   channel?: string;
-  createdAt?: string;
-  lastActivity?: string;
-  transcriptPath?: string;
+  displayName?: string;
+  updatedAt?: number;
 }
 
 interface SessionsResponse {
@@ -26,7 +26,6 @@ interface SessionsResponse {
 interface HistoryMessage {
   role: string;
   content: string;
-  timestamp?: string;
 }
 
 export function Chat() {
@@ -41,12 +40,11 @@ export function Chat() {
   const [history, setHistory] = useState<HistoryMessage[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [sendInput, setSendInput] = useState("");
-  const [newChatInput, setNewChatInput] = useState("");
-  const [sending, setSending] = useState(false);
 
-  // New conversation mode
-  const [newChat, setNewChat] = useState(false);
-  const { messages: sseMessages, streaming, send: sseSend } = useSSEChat();
+  // Active chat mode (new conversation or send to existing via WS)
+  const [activeSessionKey, setActiveSessionKey] = useState<string | null>(null);
+  const { messages: sseMessages, streaming, send: sseSend, reset: sseReset } =
+    useSSEChat(activeSessionKey ?? undefined);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -58,12 +56,14 @@ export function Chat() {
     (s) =>
       !search ||
       s.key.toLowerCase().includes(search.toLowerCase()) ||
-      s.channel?.toLowerCase().includes(search.toLowerCase()),
+      s.channel?.toLowerCase().includes(search.toLowerCase()) ||
+      s.displayName?.toLowerCase().includes(search.toLowerCase()),
   );
 
-  const loadHistory = async (key: string) => {
+  const loadSession = async (key: string) => {
     setSelectedKey(key);
-    setNewChat(false);
+    setActiveSessionKey(key);
+    sseReset();
     setHistoryLoading(true);
     try {
       const data = await fetchJSON<{ messages: HistoryMessage[] }>(
@@ -77,35 +77,24 @@ export function Chat() {
     }
   };
 
-  const handleSendToSession = async () => {
-    const text = sendInput.trim();
-    if (!text || !selectedKey || sending) return;
-    setSendInput("");
-    setSending(true);
-    try {
-      await postJSON(`/sessions/${selectedKey}/send`, { message: text });
-      // Reload history after send
-      await loadHistory(selectedKey);
-    } catch {
-      // ignore
-    } finally {
-      setSending(false);
-    }
-  };
-
   const startNewChat = () => {
     setSelectedKey(null);
-    setNewChat(true);
-    setNewChatInput("");
+    setActiveSessionKey("mc:chat");
+    sseReset();
     setHistory([]);
+    setSendInput("");
   };
 
-  const handleNewChatSend = () => {
-    const text = newChatInput.trim();
+  const handleSend = () => {
+    const text = sendInput.trim();
     if (!text || streaming) return;
-    setNewChatInput("");
+    setSendInput("");
     sseSend(text);
   };
+
+  // Combine history with live SSE messages
+  const allMessages = [...history, ...sseMessages];
+  const isActive = activeSessionKey !== null;
 
   return (
     <PageShell title="Chat">
@@ -127,19 +116,19 @@ export function Chat() {
           <button
             onClick={startNewChat}
             className={`mx-3 mt-3 mb-1 text-sm px-3 py-2 rounded-lg flex items-center gap-2 transition-colors ${
-              newChat
+              activeSessionKey === "mc:chat" && !selectedKey
                 ? "bg-accent/15 text-accent"
                 : "text-text-secondary hover:bg-surface-control"
             }`}
           >
-            <MessageSquare size={14} />
+            <Plus size={14} />
             New Conversation
           </button>
           <div className="flex-1 overflow-y-auto p-2">
             {filteredSessions.map((s) => (
               <button
                 key={s.key}
-                onClick={() => loadHistory(s.key)}
+                onClick={() => loadSession(s.key)}
                 className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between transition-colors ${
                   selectedKey === s.key
                     ? "bg-accent/15 text-accent"
@@ -147,7 +136,9 @@ export function Chat() {
                 }`}
               >
                 <div className="truncate">
-                  <p className="font-medium truncate">{s.key}</p>
+                  <p className="font-medium truncate">
+                    {s.displayName || s.key}
+                  </p>
                   {s.channel && (
                     <p className="text-xs text-text-quaternary">{s.channel}</p>
                   )}
@@ -165,38 +156,32 @@ export function Chat() {
 
         {/* Message area */}
         <GlassCard className="flex-1 flex flex-col !p-0 overflow-hidden">
+          {/* Header */}
+          {isActive && (
+            <div className="px-4 py-2.5 border-b border-separator flex items-center gap-2">
+              <MessageSquare size={14} className="text-text-tertiary" />
+              <span className="text-sm text-text-secondary">
+                {selectedKey || "New Conversation"}
+              </span>
+            </div>
+          )}
+
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
             {historyLoading ? (
               <div className="flex items-center justify-center h-full text-text-tertiary">
                 <Loader2 size={20} className="animate-spin" />
               </div>
-            ) : newChat ? (
-              // New chat messages from SSE
-              sseMessages.length === 0 ? (
+            ) : isActive ? (
+              allMessages.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-text-quaternary text-sm">
-                  Start a new conversation
+                  Send a message to start chatting
                 </div>
               ) : (
-                sseMessages.map((msg, i) => (
+                allMessages.map((msg, i) => (
                   <MessageBubble
                     key={i}
                     role={msg.role}
-                    content={msg.content}
-                  />
-                ))
-              )
-            ) : selectedKey ? (
-              // Existing session history
-              history.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-text-quaternary text-sm">
-                  No messages in this session
-                </div>
-              ) : (
-                history.map((msg, i) => (
-                  <MessageBubble
-                    key={i}
-                    role={msg.role as "user" | "assistant"}
                     content={msg.content}
                   />
                 ))
@@ -215,30 +200,22 @@ export function Chat() {
           </div>
 
           {/* Input */}
-          {(newChat || selectedKey) && (
+          {isActive && (
             <div className="px-4 py-3 border-t border-separator">
               <div className="flex items-center gap-2 bg-surface-input rounded-lg px-3 py-2">
                 <input
                   type="text"
                   placeholder="Send a message..."
-                  value={newChat ? newChatInput : sendInput}
-                  onChange={(e) =>
-                    newChat
-                      ? setNewChatInput(e.target.value)
-                      : setSendInput(e.target.value)
-                  }
+                  value={sendInput}
+                  onChange={(e) => setSendInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      newChat ? handleNewChatSend() : handleSendToSession();
-                    }
+                    if (e.key === "Enter" && !e.shiftKey) handleSend();
                   }}
                   className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-quaternary outline-none"
                 />
                 <button
-                  onClick={() =>
-                    newChat ? handleNewChatSend() : handleSendToSession()
-                  }
-                  disabled={sending || streaming}
+                  onClick={handleSend}
+                  disabled={streaming || !sendInput.trim()}
                   className="text-accent disabled:opacity-30 transition-opacity"
                 >
                   <Send size={16} />

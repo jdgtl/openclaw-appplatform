@@ -5,7 +5,7 @@ import { usePolling } from "../lib/hooks.js";
 import {
   Bot,
   MessageSquare,
-  Zap,
+  Cpu,
   Radio,
   Heart,
   Activity,
@@ -28,7 +28,13 @@ interface StatusData {
     status?: string;
   } | null;
   channels: Record<string, { enabled: boolean }> | null;
-  models: unknown;
+  models: {
+    mode?: string;
+    providers?: Record<
+      string,
+      { models?: { id: string; name: string; reasoning?: boolean }[] }
+    >;
+  } | null;
   activity: { file: string; content: string }[];
 }
 
@@ -49,6 +55,9 @@ export function Dashboard() {
   const channels = data?.channels ?? {};
   const heartbeat = data?.heartbeat;
   const activity = data?.activity ?? [];
+  const models = data?.models?.providers
+    ? Object.values(data.models.providers).flatMap((p) => p.models ?? [])
+    : [];
 
   return (
     <PageShell title="Dashboard">
@@ -119,19 +128,37 @@ export function Dashboard() {
           <HeartbeatCard heartbeat={heartbeat ?? null} />
         </GlassCard>
 
-        {/* Token Usage placeholder */}
+        {/* Models */}
         <GlassCard delay={0.2}>
           <div className="flex items-center gap-3 mb-3">
             <div className="h-9 w-9 rounded-lg bg-accent/15 flex items-center justify-center">
-              <Zap size={18} className="text-accent" />
+              <Cpu size={18} className="text-accent" />
             </div>
-            <h3 className="text-sm font-medium text-text-primary">
-              Token Usage
-            </h3>
+            <h3 className="text-sm font-medium text-text-primary">Models</h3>
           </div>
-          <p className="text-sm text-text-quaternary">
-            Coming soon — token usage tracking
-          </p>
+          <div className="flex flex-col gap-1.5">
+            {models.length > 0 ? (
+              models.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-center justify-between text-sm"
+                >
+                  <span className="text-text-secondary truncate mr-2">
+                    {m.name}
+                  </span>
+                  {m.reasoning && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/15 text-accent shrink-0">
+                      R1
+                    </span>
+                  )}
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-text-quaternary">
+                No models configured
+              </p>
+            )}
+          </div>
         </GlassCard>
 
         {/* Activity Feed */}

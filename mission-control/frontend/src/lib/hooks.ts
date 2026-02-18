@@ -40,95 +40,115 @@ export function usePolling<T>(
   return { data, error, loading };
 }
 
-// SSE-based chat with the agent
+// SSE-based chat with the agent via gateway WebSocket proxy
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
 }
 
-export function useSSEChat() {
+export function useSSEChat(sessionKey?: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  const send = useCallback(async (text: string) => {
-    const userMsg: ChatMessage = { role: "user", content: text };
-    setMessages((prev) => [...prev, userMsg]);
-    setStreaming(true);
+  const send = useCallback(
+    async (text: string) => {
+      const userMsg: ChatMessage = { role: "user", content: text };
+      setMessages((prev) => [...prev, userMsg]);
+      setStreaming(true);
 
-    const allMessages = [
-      ...messages,
-      { role: "user" as const, content: text },
-    ];
+      try {
+        abortRef.current = new AbortController();
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: text,
+            sessionKey: sessionKey || "mc:chat",
+          }),
+          signal: abortRef.current.signal,
+        });
 
-    try {
-      abortRef.current = new AbortController();
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: allMessages }),
-        signal: abortRef.current.signal,
-      });
+        if (!res.ok || !res.body) {
+          const body = await res.text().catch(() => "");
+          throw new Error(body || `Chat failed: ${res.status}`);
+        }
 
-      if (!res.ok || !res.body) {
-        throw new Error(`Chat failed: ${res.status}`);
-      }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let assistantContent = "";
+        // Add placeholder for assistant response
+        setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
-      // Add placeholder for assistant response
-      setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
 
-        const chunk = decoder.decode(value, { stream: true });
+          for (const line of chunk.split("\n")) {
+            if (!line.startsWith("data: ")) continue;
+            const payload = line.slice(6);
+            if (payload === "[DONE]") continue;
 
-        // Parse SSE data lines
-        for (const line of chunk.split("\n")) {
-          if (!line.startsWith("data: ")) continue;
-          const payload = line.slice(6);
-          if (payload === "[DONE]") continue;
+            try {
+              const parsed = JSON.parse(payload);
 
-          try {
-            const parsed = JSON.parse(payload);
-            const delta = parsed.choices?.[0]?.delta?.content;
-            if (delta) {
-              assistantContent += delta;
-              setMessages((prev) => {
-                const updated = [...prev];
-                updated[updated.length - 1] = {
-                  role: "assistant",
-                  content: assistantContent,
-                };
-                return updated;
-              });
+              // Check for error events
+              if (parsed.error) {
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  updated[updated.length - 1] = {
+                    role: "assistant",
+                    content: `Error: ${parsed.error.message}`,
+                  };
+                  return updated;
+                });
+                continue;
+              }
+
+              // Delta content — accumulated text from the server
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content != null) {
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  updated[updated.length - 1] = {
+                    role: "assistant",
+                    content,
+                  };
+                  return updated;
+                });
+              }
+            } catch {
+              // non-JSON SSE line, skip
             }
-          } catch {
-            // non-JSON SSE line, skip
           }
         }
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") {
+          setMessages((prev) => [
+            ...prev.filter((m) => m.content !== ""),
+            {
+              role: "assistant",
+              content: `Error: ${(err as Error).message}`,
+            },
+          ]);
+        }
+      } finally {
+        setStreaming(false);
+        abortRef.current = null;
       }
-    } catch (err) {
-      if ((err as Error).name !== "AbortError") {
-        setMessages((prev) => [
-          ...prev.filter((m) => m.content !== ""),
-          {
-            role: "assistant",
-            content: `Error: ${(err as Error).message}`,
-          },
-        ]);
-      }
-    } finally {
-      setStreaming(false);
-      abortRef.current = null;
-    }
-  }, [messages]);
+    },
+    [sessionKey],
+  );
 
-  return { messages, streaming, send };
+  const reset = useCallback(() => {
+    abortRef.current?.abort();
+    setMessages([]);
+    setStreaming(false);
+  }, []);
+
+  return { messages, streaming, send, reset };
 }
 
 // Trigger a manual fetch
