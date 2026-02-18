@@ -170,7 +170,7 @@ if [ -n "$ANTHROPIC_BASE_URL" ]; then
     '.models.providers.anthropic = {
       "baseUrl": $baseUrl,
       "apiKey": $apiKey,
-      "api": "anthropic",
+      "api": "anthropic-messages",
       "models": [
         {"id": "claude-opus-4-6", "name": "Claude Opus 4.6", "reasoning": true, "input": ["text","image"], "contextWindow": 200000, "maxTokens": 16384},
         {"id": "claude-sonnet-4-6", "name": "Claude Sonnet 4.6", "reasoning": true, "input": ["text","image"], "contextWindow": 200000, "maxTokens": 16384},
