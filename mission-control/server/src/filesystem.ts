@@ -3,10 +3,9 @@ import { join } from "node:path";
 
 const stateDir = process.env.OPENCLAW_STATE_DIR || "/data/.openclaw";
 
-// OpenClaw's default workspace is ~/.openclaw/workspace (under the running user's home).
-// On our container that's /home/openclaw/.openclaw/workspace.
+// OpenClaw's workspace lives at ~/.openclaw/workspace which symlinks to /data/.openclaw/workspace
 const workspaceDir =
-  process.env.OPENCLAW_WORKSPACE_DIR || "/home/openclaw/.openclaw/workspace";
+  process.env.OPENCLAW_WORKSPACE_DIR || "/data/.openclaw/workspace";
 
 export async function readConfig(): Promise<Record<string, unknown> | null> {
   try {

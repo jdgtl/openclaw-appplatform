@@ -1,0 +1,16 @@
+services:
+  openclaw-gateway:
+    build: .
+    env_file: .env
+    environment:
+      - MC_ENABLE=${MC_ENABLE:-true}
+      - MC_PORT=${MC_PORT:-3333}
+    ports:
+      - "3333:3333"
+      - "18789:18789"
+    volumes:
+      - openclaw-data:/data
+    restart: unless-stopped
+
+volumes:
+  openclaw-data:
