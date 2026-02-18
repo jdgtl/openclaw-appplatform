@@ -9,6 +9,13 @@ source_env_prefix OPENCLAW_
 persist_env_var OPENCLAW_ \
   GRADIENT_API_KEY=change-me \
   BRAVE_API_KEY="${BRAVE_API_KEY}" \
+  GH_TOKEN="${GH_TOKEN}" \
+  ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" \
+  ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL}" \
+  OPENAI_API_KEY="${OPENAI_API_KEY}" \
+  OPENAI_BASE_URL="${OPENAI_BASE_URL}" \
+  NOTION_API_KEY="${NOTION_API_KEY}" \
+  CLICKUP_API_TOKEN="${CLICKUP_API_TOKEN}" \
   GOG_KEYRING_PASSWORD="${GOG_KEYRING_PASSWORD}" \
   TAILSCALE_ENABLE="${TAILSCALE_ENABLE:-false}" \
   SLACK_ENABLE="${SLACK_ENABLE:-false}" \
@@ -58,6 +65,23 @@ case ":$PATH:" in
 esac
 EOF
     echo "Appended environment setup to $PROFILE"
+fi
+
+# Configure Claude Code to use Aperture proxy (if ANTHROPIC_BASE_URL is set)
+if [ -n "$ANTHROPIC_BASE_URL" ]; then
+  CLAUDE_CONFIG_DIR="/home/openclaw/.claude"
+  CLAUDE_SETTINGS="$CLAUDE_CONFIG_DIR/settings.json"
+  mkdir -p "$CLAUDE_CONFIG_DIR"
+  cat > "$CLAUDE_SETTINGS" <<CEOF
+{
+  "apiKeyHelper": "echo '-'",
+  "env": {
+    "ANTHROPIC_BASE_URL": "$ANTHROPIC_BASE_URL"
+  }
+}
+CEOF
+  chown -R openclaw:openclaw "$CLAUDE_CONFIG_DIR"
+  echo "[generate-config] Claude Code configured to use Aperture at $ANTHROPIC_BASE_URL"
 fi
 
 DEFAULT_CONFIG="/etc/openclaw/openclaw.default.json"
@@ -137,6 +161,50 @@ if [ "${SLACK_ENABLE:-false}" = "true" ]; then
   else
     echo "[generate-config] WARNING: SLACK_ENABLE=true but SLACK_BOT_TOKEN or SLACK_APP_TOKEN not set"
   fi
+fi
+
+# Add Anthropic provider via Aperture proxy (if ANTHROPIC_BASE_URL is set)
+if [ -n "$ANTHROPIC_BASE_URL" ]; then
+  echo "[generate-config] Adding Anthropic provider via Aperture ($ANTHROPIC_BASE_URL)"
+  jq --arg baseUrl "$ANTHROPIC_BASE_URL" --arg apiKey "${ANTHROPIC_API_KEY:--}" \
+    '.models.providers.anthropic = {
+      "baseUrl": $baseUrl,
+      "apiKey": $apiKey,
+      "api": "anthropic",
+      "models": [
+        {"id": "claude-opus-4-6", "name": "Claude Opus 4.6", "reasoning": true, "input": ["text","image"], "contextWindow": 200000, "maxTokens": 16384},
+        {"id": "claude-sonnet-4-6", "name": "Claude Sonnet 4.6", "reasoning": true, "input": ["text","image"], "contextWindow": 200000, "maxTokens": 16384},
+        {"id": "claude-sonnet-4-5", "name": "Claude Sonnet 4.5", "reasoning": true, "input": ["text","image"], "contextWindow": 200000, "maxTokens": 16384},
+        {"id": "claude-sonnet-4-5-20250929", "name": "Claude Sonnet 4.5 (20250929)", "reasoning": true, "input": ["text","image"], "contextWindow": 200000, "maxTokens": 16384},
+        {"id": "claude-haiku-4-5", "name": "Claude Haiku 4.5", "reasoning": false, "input": ["text","image"], "contextWindow": 200000, "maxTokens": 8192},
+        {"id": "claude-haiku-4-5-20251001", "name": "Claude Haiku 4.5 (20251001)", "reasoning": false, "input": ["text","image"], "contextWindow": 200000, "maxTokens": 8192}
+      ]
+    }' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+fi
+
+# Add OpenAI provider via Aperture proxy (if OPENAI_BASE_URL is set)
+if [ -n "$OPENAI_BASE_URL" ]; then
+  echo "[generate-config] Adding OpenAI provider via Aperture ($OPENAI_BASE_URL)"
+  jq --arg baseUrl "$OPENAI_BASE_URL" --arg apiKey "${OPENAI_API_KEY:--}" \
+    '.models.providers.openai = {
+      "baseUrl": $baseUrl,
+      "apiKey": $apiKey,
+      "api": "openai-completions",
+      "models": [
+        {"id": "gpt-5.2-chat-latest", "name": "GPT-5.2 Chat", "reasoning": false, "input": ["text","image"], "contextWindow": 128000, "maxTokens": 16384},
+        {"id": "gpt-5.2-codex", "name": "GPT-5.2 Codex", "reasoning": false, "input": ["text"], "contextWindow": 128000, "maxTokens": 16384},
+        {"id": "gpt-5.2", "name": "GPT-5.2", "reasoning": false, "input": ["text","image"], "contextWindow": 128000, "maxTokens": 16384},
+        {"id": "gpt-5.1-chat-latest", "name": "GPT-5.1 Chat", "reasoning": false, "input": ["text","image"], "contextWindow": 128000, "maxTokens": 16384},
+        {"id": "gpt-5.1-codex-max", "name": "GPT-5.1 Codex Max", "reasoning": false, "input": ["text"], "contextWindow": 128000, "maxTokens": 16384},
+        {"id": "gpt-5.1-codex", "name": "GPT-5.1 Codex", "reasoning": false, "input": ["text"], "contextWindow": 128000, "maxTokens": 16384},
+        {"id": "gpt-5.1", "name": "GPT-5.1", "reasoning": false, "input": ["text","image"], "contextWindow": 128000, "maxTokens": 16384},
+        {"id": "gpt-5-chat-latest", "name": "GPT-5 Chat", "reasoning": false, "input": ["text","image"], "contextWindow": 128000, "maxTokens": 16384},
+        {"id": "gpt-5-codex", "name": "GPT-5 Codex", "reasoning": false, "input": ["text"], "contextWindow": 128000, "maxTokens": 16384},
+        {"id": "gpt-5-nano", "name": "GPT-5 Nano", "reasoning": false, "input": ["text"], "contextWindow": 128000, "maxTokens": 8192},
+        {"id": "gpt-5-mini", "name": "GPT-5 Mini", "reasoning": false, "input": ["text","image"], "contextWindow": 128000, "maxTokens": 16384},
+        {"id": "gpt-5", "name": "GPT-5", "reasoning": false, "input": ["text","image"], "contextWindow": 128000, "maxTokens": 16384}
+      ]
+    }' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
 fi
 
 # Add gateway auth token and trust localhost proxy (Mission Control)

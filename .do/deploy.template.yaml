@@ -86,6 +86,35 @@ spec:
           scope: RUN_TIME
           type: SECRET
 
+        # GitHub CLI (gh) authentication
+        - key: GH_TOKEN
+          scope: RUN_TIME
+          type: SECRET
+
+        # Aperture AI proxy (Tailscale) — manages API keys centrally
+        - key: ANTHROPIC_BASE_URL
+          scope: RUN_TIME
+          value: "http://ai.taila801b3.ts.net"
+        - key: ANTHROPIC_API_KEY
+          scope: RUN_TIME
+          value: "-"
+        - key: OPENAI_BASE_URL
+          scope: RUN_TIME
+          value: "http://ai.taila801b3.ts.net"
+        - key: OPENAI_API_KEY
+          scope: RUN_TIME
+          value: "-"
+
+        # Notion API
+        - key: NOTION_API_KEY
+          scope: RUN_TIME
+          type: SECRET
+
+        # ClickUp API (used by mcporter MCP server)
+        - key: CLICKUP_API_TOKEN
+          scope: RUN_TIME
+          type: SECRET
+
         # Mission Control dashboard
         - key: MC_ENABLE
           scope: RUN_TIME
