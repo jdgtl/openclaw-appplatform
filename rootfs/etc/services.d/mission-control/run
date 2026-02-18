@@ -26,6 +26,5 @@ exec runuser -l openclaw -c "\
   export MC_PORT='${MC_PORT:-3333}' \
   GATEWAY_PORT='${GATEWAY_PORT:-18789}' \
   OPENCLAW_GATEWAY_TOKEN='${OPENCLAW_GATEWAY_TOKEN}' \
-  OPENCLAW_STATE_DIR='${OPENCLAW_STATE_DIR:-/data/.openclaw}' \
-  OPENCLAW_WORKSPACE_DIR='${OPENCLAW_WORKSPACE_DIR:-/home/openclaw/.openclaw/workspace}'; \
+  OPENCLAW_STATE_DIR='${OPENCLAW_STATE_DIR:-/data/.openclaw}'; \
   exec node /opt/mission-control/server/dist/index.js" 2>&1

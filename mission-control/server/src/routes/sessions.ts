@@ -1,6 +1,9 @@
 import { Router } from "express";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
+import { join } from "node:path";
 import type { GatewayClient } from "../gateway.js";
+
+const stateDir = process.env.OPENCLAW_STATE_DIR || "/data/.openclaw";
 
 // Unwrap the nested tool invoke response to get the actual data
 function unwrapToolResult(raw: unknown): unknown {
@@ -15,6 +18,33 @@ function unwrapToolResult(raw: unknown): unknown {
     }
   }
   return raw;
+}
+
+// Extract plain text from OpenClaw's content array format
+// Content can be: string | [{type: "text", text: "..."}, {type: "thinking", ...}]
+function extractText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((c: Record<string, string>) => c.type === "text")
+      .map((c: Record<string, string>) => c.text)
+      .join("");
+  }
+  return String(content ?? "");
+}
+
+// Find transcript file by session ID in the state dir
+async function findTranscript(sessionId: string): Promise<string | null> {
+  const sessionsDir = join(stateDir, "agents", "main", "sessions");
+  try {
+    const files = await readdir(sessionsDir);
+    const match = files.find(
+      (f) => f.startsWith(sessionId) && f.endsWith(".jsonl"),
+    );
+    return match ? join(sessionsDir, match) : null;
+  } catch {
+    return null;
+  }
 }
 
 export function sessionsRouter(gateway: GatewayClient): Router {
@@ -37,20 +67,45 @@ export function sessionsRouter(gateway: GatewayClient): Router {
     try {
       const raw = await gateway.invokeTool("sessions_list");
       const sessions = unwrapToolResult(raw) as {
-        sessions?: { key: string; transcriptPath?: string }[];
+        sessions?: {
+          key: string;
+          sessionId?: string;
+          transcriptPath?: string;
+        }[];
       };
 
       const session = sessions?.sessions?.find(
         (s) => s.key === req.params.key,
       );
 
-      if (!session?.transcriptPath) {
-        res.status(404).json({ error: "Session or transcript not found" });
+      if (!session) {
+        res.status(404).json({ error: "Session not found" });
         return;
       }
 
-      const transcript = await readFile(session.transcriptPath, "utf-8");
-      const lines = transcript
+      // Find transcript: try reported path first, then search by session ID
+      let resolvedPath: string | undefined = session.transcriptPath;
+      if (resolvedPath) {
+        try {
+          await readFile(resolvedPath, "utf-8");
+        } catch {
+          resolvedPath = undefined;
+        }
+      }
+
+      if (!resolvedPath && session.sessionId) {
+        resolvedPath = (await findTranscript(session.sessionId)) ?? undefined;
+      }
+
+      const transcriptPath = resolvedPath;
+
+      if (!transcriptPath) {
+        res.json({ messages: [] });
+        return;
+      }
+
+      const transcript = await readFile(transcriptPath, "utf-8");
+      const messages = transcript
         .trim()
         .split("\n")
         .map((line: string) => {
@@ -60,9 +115,21 @@ export function sessionsRouter(gateway: GatewayClient): Router {
             return null;
           }
         })
-        .filter(Boolean);
+        .filter(
+          (entry: Record<string, unknown> | null) =>
+            entry?.type === "message" &&
+            (entry.message as Record<string, unknown>)?.role,
+        )
+        .map((entry: Record<string, unknown>) => {
+          const msg = entry.message as Record<string, unknown>;
+          return {
+            role: msg.role as string,
+            content: extractText(msg.content),
+          };
+        })
+        .filter((m: { content: string }) => m.content.length > 0);
 
-      res.json({ messages: lines });
+      res.json({ messages });
     } catch (err) {
       res.status(502).json({
         error:

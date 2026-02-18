@@ -16,7 +16,6 @@ persist_env_var MC_ \
   MC_PORT="${MC_PORT:-3333}" \
   OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN}" \
   OPENCLAW_STATE_DIR="${OPENCLAW_STATE_DIR:-/data/.openclaw}" \
-  OPENCLAW_WORKSPACE_DIR="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}" \
   TAILSCALE_ENABLE="${TAILSCALE_ENABLE:-false}"
 
 # Fix permissions so openclaw user can read MC_ env vars
