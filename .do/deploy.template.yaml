@@ -91,6 +91,11 @@ spec:
           scope: RUN_TIME
           type: SECRET
 
+        # Claude Code Runner API (remote dev workstation on Tailscale)
+        - key: CLAUDE_RUNNER_TOKEN
+          scope: RUN_TIME
+          type: SECRET
+
         # Aperture AI proxy (Tailscale) — manages API keys centrally
         - key: ANTHROPIC_BASE_URL
           scope: RUN_TIME
