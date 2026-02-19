@@ -1,0 +1,23 @@
+#!/command/with-contenv bash
+# TCP proxy: bridges local HTTP to Tailscale Aperture via `tailscale nc`
+# Required because userspace networking (no TUN) can't route 100.x.x.x directly.
+source /etc/s6-overlay/lib/env-utils.sh
+source_env_prefix TS_
+
+if [ "${TAILSCALE_ENABLE:-false}" != "true" ]; then
+  echo "[ts-proxy] Disabled (Tailscale not enabled)"
+  s6-svc -Od .
+  exit 0
+fi
+
+# Wait for Tailscale to be ready
+for i in $(seq 1 30); do
+  if tailscale status --json >/dev/null 2>&1; then
+    break
+  fi
+  echo "[ts-proxy] Waiting for Tailscale... ($i/30)"
+  sleep 2
+done
+
+echo "[ts-proxy] Starting Aperture TCP proxy"
+exec node /opt/ts-proxy/proxy.js
