@@ -4,6 +4,14 @@
 source /etc/s6-overlay/lib/env-utils.sh
 source_env_prefix TS_
 
+# Node.js is installed via nvm — resolve the path
+NODE_BIN="$(ls /home/openclaw/.nvm/versions/node/*/bin/node 2>/dev/null | tail -1)"
+if [ -z "$NODE_BIN" ]; then
+  echo "[ts-proxy] ERROR: Node.js not found" >&2
+  s6-svc -Od .
+  exit 1
+fi
+
 if [ "${TAILSCALE_ENABLE:-false}" != "true" ]; then
   echo "[ts-proxy] Disabled (Tailscale not enabled)"
   s6-svc -Od .
@@ -20,4 +28,4 @@ for i in $(seq 1 30); do
 done
 
 echo "[ts-proxy] Starting Aperture TCP proxy"
-exec node /opt/ts-proxy/proxy.js
+exec "$NODE_BIN" /opt/ts-proxy/proxy.js
