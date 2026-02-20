@@ -36,6 +36,12 @@ echo "[restore-state] Restoring $PATH_COUNT paths..."
 for i in $(seq 0 $((PATH_COUNT - 1))); do
   RESTORE_PATH=$(yq -r ".paths[$i].path" "$RESTIC_BACKUP_CONFIG_FILE")
 
+  # Skip /home restore if SKIP_HOME_RESTORE is set (saves ~4GB / avoids OOM)
+  if [ "$RESTORE_PATH" = "/home" ] && [ "${SKIP_HOME_RESTORE:-false}" = "true" ]; then
+    echo "[restore-state] Skipping $RESTORE_PATH (SKIP_HOME_RESTORE=true)"
+    continue
+  fi
+
   # Ensure parent directory exists
   mkdir -p "$(dirname "$RESTORE_PATH")"
 
