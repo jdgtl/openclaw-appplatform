@@ -26,6 +26,10 @@ persist_env_var OPENCLAW_ \
   SLACK_ENABLE="${SLACK_ENABLE:-false}" \
   SLACK_BOT_TOKEN="${SLACK_BOT_TOKEN}" \
   SLACK_APP_TOKEN="${SLACK_APP_TOKEN}" \
+  SLACK_ACCOUNT_NAME="${SLACK_ACCOUNT_NAME}" \
+  SLACK_BOT_TOKEN_2="${SLACK_BOT_TOKEN_2}" \
+  SLACK_APP_TOKEN_2="${SLACK_APP_TOKEN_2}" \
+  SLACK_ACCOUNT_2_NAME="${SLACK_ACCOUNT_2_NAME}" \
   TS_SOCKET="${TS_SOCKET}" \
   TS_EXTRA_ARGS="${TS_EXTRA_ARGS}" \
   TS_HOSTNAME="${TS_HOSTNAME}" \
@@ -159,10 +163,22 @@ fi
 # Add Slack channel config when enabled
 if [ "${SLACK_ENABLE:-false}" = "true" ]; then
   if [ -n "$SLACK_BOT_TOKEN" ] && [ -n "$SLACK_APP_TOKEN" ]; then
-    echo "[generate-config] Adding Slack channel config (socket mode)"
-    jq --arg botToken "$SLACK_BOT_TOKEN" --arg appToken "$SLACK_APP_TOKEN" \
-      '.plugins.entries.slack.enabled = true | .channels.slack.enabled = true | .channels.slack.mode = "socket" | .channels.slack.botToken = $botToken | .channels.slack.appToken = $appToken | .channels.slack.dmPolicy = "pairing" | .channels.slack.groupPolicy = "allowlist" | .channels.slack.replyToMode = "off"' \
-      "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+    # Multi-account: if second workspace tokens are present, use accounts structure
+    if [ -n "$SLACK_BOT_TOKEN_2" ] && [ -n "$SLACK_APP_TOKEN_2" ]; then
+      ACCT1="${SLACK_ACCOUNT_NAME:-default}"
+      ACCT2="${SLACK_ACCOUNT_2_NAME:-account2}"
+      echo "[generate-config] Adding Slack multi-account config ($ACCT1, $ACCT2)"
+      jq --arg acct1 "$ACCT1" --arg bot1 "$SLACK_BOT_TOKEN" --arg app1 "$SLACK_APP_TOKEN" \
+         --arg acct2 "$ACCT2" --arg bot2 "$SLACK_BOT_TOKEN_2" --arg app2 "$SLACK_APP_TOKEN_2" \
+        '.plugins.entries.slack.enabled = true | .channels.slack.enabled = true | .channels.slack.mode = "socket" | .channels.slack.dmPolicy = "pairing" | .channels.slack.groupPolicy = "allowlist" | .channels.slack.replyToMode = "off" | .channels.slack.accounts[$acct1] = {"name": $acct1, "botToken": $bot1, "appToken": $app1} | .channels.slack.accounts[$acct2] = {"name": $acct2, "botToken": $bot2, "appToken": $app2}' \
+        "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+    else
+      # Single account: flat config
+      echo "[generate-config] Adding Slack channel config (socket mode)"
+      jq --arg botToken "$SLACK_BOT_TOKEN" --arg appToken "$SLACK_APP_TOKEN" \
+        '.plugins.entries.slack.enabled = true | .channels.slack.enabled = true | .channels.slack.mode = "socket" | .channels.slack.botToken = $botToken | .channels.slack.appToken = $appToken | .channels.slack.dmPolicy = "pairing" | .channels.slack.groupPolicy = "allowlist" | .channels.slack.replyToMode = "off"' \
+        "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+    fi
   else
     echo "[generate-config] WARNING: SLACK_ENABLE=true but SLACK_BOT_TOKEN or SLACK_APP_TOKEN not set"
   fi

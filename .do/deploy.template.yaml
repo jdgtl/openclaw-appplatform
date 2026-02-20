@@ -75,6 +75,18 @@ spec:
         - key: SLACK_APP_TOKEN
           scope: RUN_TIME
           type: SECRET
+        # Multi-account Slack (optional second workspace)
+        - key: SLACK_ACCOUNT_NAME
+          scope: RUN_TIME
+          value: "default"
+        - key: SLACK_BOT_TOKEN_2
+          scope: RUN_TIME
+          type: SECRET
+        - key: SLACK_APP_TOKEN_2
+          scope: RUN_TIME
+          type: SECRET
+        - key: SLACK_ACCOUNT_2_NAME
+          scope: RUN_TIME
 
         # Web search (Brave free tier: 2000 queries/month)
         - key: BRAVE_API_KEY
