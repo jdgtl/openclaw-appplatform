@@ -11,6 +11,7 @@ import {
   Activity,
   Play,
   Loader2,
+  ChevronRight,
 } from "lucide-react";
 import { postJSON } from "../lib/api.js";
 import { useState } from "react";
@@ -55,9 +56,16 @@ export function Dashboard() {
   const channels = data?.channels ?? {};
   const heartbeat = data?.heartbeat;
   const activity = data?.activity ?? [];
-  const models = data?.models?.providers
-    ? Object.values(data.models.providers).flatMap((p) => p.models ?? [])
-    : [];
+  const providers = data?.models?.providers ?? {};
+  const providerEntries = Object.entries(providers)
+    .map(([key, p]) => ({
+      key,
+      label: providerLabel(key),
+      models: p.models ?? [],
+      reasoning: (p.models ?? []).filter((m) => m.reasoning).length,
+    }))
+    .filter((p) => p.models.length > 0);
+  const totalModels = providerEntries.reduce((n, p) => n + p.models.length, 0);
 
   return (
     <PageShell title="Dashboard">
@@ -130,35 +138,7 @@ export function Dashboard() {
 
         {/* Models */}
         <GlassCard delay={0.2}>
-          <div className="flex items-center gap-3 mb-3">
-            <div className="h-9 w-9 rounded-lg bg-accent/15 flex items-center justify-center">
-              <Cpu size={18} className="text-accent" />
-            </div>
-            <h3 className="text-sm font-medium text-text-primary">Models</h3>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            {models.length > 0 ? (
-              models.map((m) => (
-                <div
-                  key={m.id}
-                  className="flex items-center justify-between text-sm"
-                >
-                  <span className="text-text-secondary truncate mr-2">
-                    {m.name}
-                  </span>
-                  {m.reasoning && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/15 text-accent shrink-0">
-                      R1
-                    </span>
-                  )}
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-text-quaternary">
-                No models configured
-              </p>
-            )}
-          </div>
+          <ModelsCard providers={providerEntries} total={totalModels} />
         </GlassCard>
 
         {/* Activity Feed */}
@@ -257,4 +237,110 @@ function HeartbeatCard({
       </button>
     </>
   );
+}
+
+interface ProviderEntry {
+  key: string;
+  label: string;
+  models: { id: string; name: string; reasoning?: boolean }[];
+  reasoning: number;
+}
+
+function ModelsCard({
+  providers,
+  total,
+}: {
+  providers: ProviderEntry[];
+  total: number;
+}) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  return (
+    <>
+      <div className="flex items-center gap-3 mb-3">
+        <div className="h-9 w-9 rounded-lg bg-accent/15 flex items-center justify-center">
+          <Cpu size={18} className="text-accent" />
+        </div>
+        <div>
+          <h3 className="text-sm font-medium text-text-primary">Models</h3>
+          {total > 0 && (
+            <p className="text-xs text-text-tertiary">
+              {total} across {providers.length} provider
+              {providers.length !== 1 ? "s" : ""}
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="flex flex-col gap-1">
+        {providers.length > 0 ? (
+          providers.map((p) => {
+            const isOpen = expanded === p.key;
+            return (
+              <div key={p.key}>
+                <button
+                  onClick={() => setExpanded(isOpen ? null : p.key)}
+                  className="w-full flex items-center justify-between text-sm py-1 rounded hover:bg-surface-control/50 transition-colors -mx-1 px-1"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <ChevronRight
+                      size={12}
+                      className={`text-text-quaternary transition-transform ${isOpen ? "rotate-90" : ""}`}
+                    />
+                    <span className="text-text-secondary font-medium">
+                      {p.label}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-text-quaternary tabular-nums">
+                      {p.models.length}
+                    </span>
+                    {p.reasoning > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/15 text-accent tabular-nums">
+                        {p.reasoning} R
+                      </span>
+                    )}
+                  </div>
+                </button>
+                {isOpen && (
+                  <div className="ml-5 mt-0.5 mb-1 flex flex-col gap-0.5">
+                    {p.models.map((m) => (
+                      <div
+                        key={m.id}
+                        className="flex items-center justify-between text-xs py-0.5"
+                      >
+                        <span className="text-text-tertiary truncate mr-2">
+                          {m.name}
+                        </span>
+                        {m.reasoning && (
+                          <span className="text-[9px] px-1 py-px rounded bg-accent/10 text-accent/70 shrink-0">
+                            R
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        ) : (
+          <p className="text-sm text-text-quaternary">No models configured</p>
+        )}
+      </div>
+    </>
+  );
+}
+
+const PROVIDER_LABELS: Record<string, string> = {
+  anthropic: "Anthropic",
+  openai: "OpenAI",
+  gradient: "Gradient",
+  google: "Google",
+  mistral: "Mistral",
+  deepseek: "DeepSeek",
+  meta: "Meta",
+};
+
+function providerLabel(key: string): string {
+  return PROVIDER_LABELS[key] ?? key.charAt(0).toUpperCase() + key.slice(1);
 }
