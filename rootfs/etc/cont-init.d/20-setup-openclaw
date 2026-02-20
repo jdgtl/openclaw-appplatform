@@ -21,6 +21,7 @@ persist_env_var OPENCLAW_ \
   CLICKUP_API_TOKEN="${CLICKUP_API_TOKEN}" \
   GOG_KEYRING_PASSWORD="${GOG_KEYRING_PASSWORD}" \
   CLAUDE_RUNNER_TOKEN="${CLAUDE_RUNNER_TOKEN}" \
+  HEARTBEAT_INTERVAL="${HEARTBEAT_INTERVAL:-0m}" \
   TAILSCALE_ENABLE="${TAILSCALE_ENABLE:-false}" \
   SLACK_ENABLE="${SLACK_ENABLE:-false}" \
   SLACK_BOT_TOKEN="${SLACK_BOT_TOKEN}" \
@@ -209,6 +210,30 @@ if [ -n "$OPENAI_BASE_URL" ]; then
         {"id": "gpt-5", "name": "GPT-5", "reasoning": false, "input": ["text","image"], "contextWindow": 128000, "maxTokens": 16384}
       ]
     }' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+fi
+
+# Add heartbeat config (disabled by default — set HEARTBEAT_INTERVAL to "30m" or "1h" to activate)
+HEARTBEAT_INTERVAL="${HEARTBEAT_INTERVAL:-0m}"
+echo "[generate-config] Adding heartbeat config (interval: $HEARTBEAT_INTERVAL)"
+jq --arg interval "$HEARTBEAT_INTERVAL" \
+  '.agents.defaults.heartbeat = {
+    "every": $interval,
+    "target": "last",
+    "session": "main"
+  }' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+
+# Seed HEARTBEAT.md if it doesn't exist (agent can customize later via chat)
+HEARTBEAT_MD="$OPENCLAW_WORKSPACE_DIR/HEARTBEAT.md"
+if [ ! -f "$HEARTBEAT_MD" ]; then
+  mkdir -p "$(dirname "$HEARTBEAT_MD")"
+  cat > "$HEARTBEAT_MD" <<'HBEOF'
+# Heartbeat Checklist
+
+- Check if anything needs attention
+- If nothing is urgent, respond with HEARTBEAT_OK
+HBEOF
+  chown openclaw:openclaw "$HEARTBEAT_MD"
+  echo "[generate-config] Created default HEARTBEAT.md"
 fi
 
 # Add gateway auth token and trust localhost proxy (Mission Control)

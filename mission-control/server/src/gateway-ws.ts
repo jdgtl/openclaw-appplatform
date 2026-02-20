@@ -136,10 +136,12 @@ export class GatewayWS {
           req.reject(new Error("WebSocket closed"));
         }
         this.pendingReqs.clear();
-        // Notify all run listeners
+        // Notify all run listeners (deduplicate — same listener may be under multiple keys)
+        const notified = new Set<RunListener>();
         for (const [, listener] of this.runListeners) {
+          if (notified.has(listener)) continue;
+          notified.add(listener);
           listener.onError("WebSocket closed");
-          listener.cleanup();
         }
         this.runListeners.clear();
         this.scheduleReconnect();
@@ -196,7 +198,10 @@ export class GatewayWS {
   }
 
   private handleChatEvent(event: ChatEvent) {
-    const listener = this.runListeners.get(event.runId);
+    // Look up by runId first, fall back to sessionKey (gateway may assign its own runId)
+    const listener =
+      this.runListeners.get(event.runId) ??
+      this.runListeners.get(event.sessionKey);
     if (!listener) return;
 
     const text = event.message?.content
@@ -264,28 +269,36 @@ export class GatewayWS {
     onFinal: (text: string) => void,
     onError: (msg: string) => void,
   ): Promise<string> {
-    const runId = randomUUID();
+    const idempotencyKey = randomUUID();
 
-    // Register listener BEFORE sending (events may arrive fast)
-    this.runListeners.set(runId, {
+    const listener: RunListener = {
       onDelta,
       onFinal,
       onError,
-      cleanup: () => this.runListeners.delete(runId),
-    });
+      cleanup: () => {
+        this.runListeners.delete(idempotencyKey);
+        this.runListeners.delete(sessionKey);
+      },
+    };
+
+    // Register by both idempotencyKey and sessionKey BEFORE sending
+    // (events may arrive fast, and gateway may use its own runId)
+    this.runListeners.set(idempotencyKey, listener);
+    this.runListeners.set(sessionKey, listener);
 
     try {
       await this.sendReq("chat.send", {
         sessionKey,
         message,
-        idempotencyKey: runId,
+        idempotencyKey,
       });
     } catch (err) {
-      this.runListeners.delete(runId);
+      this.runListeners.delete(idempotencyKey);
+      this.runListeners.delete(sessionKey);
       throw err;
     }
 
-    return runId;
+    return idempotencyKey;
   }
 
   // Get chat history for a session

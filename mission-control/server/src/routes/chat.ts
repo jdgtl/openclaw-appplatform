@@ -40,9 +40,12 @@ export function chatRouter(gatewayWs: GatewayWS): Router {
       res.end();
     };
 
-    // Handle client disconnect
+    // Handle client disconnect — abort the gateway chat to free resources
     req.on("close", () => {
-      ended = true;
+      if (!ended) {
+        ended = true;
+        gatewayWs.chatAbort(key).catch(() => {});
+      }
     });
 
     gatewayWs

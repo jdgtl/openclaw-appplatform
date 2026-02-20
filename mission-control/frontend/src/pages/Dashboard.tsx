@@ -239,7 +239,9 @@ function HeartbeatCard({
           </div>
         </div>
       ) : (
-        <p className="text-sm text-text-quaternary">No heartbeat data</p>
+        <p className="text-sm text-text-quaternary">
+          Not yet active — set HEARTBEAT_INTERVAL to enable
+        </p>
       )}
       <button
         onClick={handleRunNow}
