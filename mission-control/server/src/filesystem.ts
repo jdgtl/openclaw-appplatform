@@ -1,5 +1,6 @@
-import { readFile, readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { readFile, writeFile, readdir, stat, rename, mkdir, rm } from "node:fs/promises";
+import { join, basename } from "node:path";
+import { randomBytes } from "node:crypto";
 
 const stateDir = process.env.OPENCLAW_STATE_DIR || "/data/.openclaw";
 
@@ -62,4 +63,275 @@ export async function readRecentActivity(
   } catch {
     return [];
   }
+}
+
+// ── Config write ──
+
+export async function writeConfig(config: Record<string, unknown>): Promise<void> {
+  const configPath = join(stateDir, "openclaw.json");
+  const tmp = configPath + "." + randomBytes(4).toString("hex") + ".tmp";
+  await writeFile(tmp, JSON.stringify(config, null, 2) + "\n", "utf-8");
+  await rename(tmp, configPath);
+}
+
+// ── Workspace file operations ──
+
+function sanitizeFileName(name: string): string {
+  const safe = basename(name).replace(/[^a-zA-Z0-9._-]/g, "");
+  if (!safe || safe === "." || safe === "..") {
+    throw new Error("Invalid filename");
+  }
+  return safe;
+}
+
+export async function listWorkspaceFiles(): Promise<
+  { name: string; size: number; modified: string }[]
+> {
+  try {
+    const files = await readdir(workspaceDir);
+    const mdFiles = files.filter((f) => f.endsWith(".md"));
+    const results: { name: string; size: number; modified: string }[] = [];
+    for (const name of mdFiles) {
+      try {
+        const s = await stat(join(workspaceDir, name));
+        results.push({ name, size: s.size, modified: s.mtime.toISOString() });
+      } catch { /* skip */ }
+    }
+    return results.sort((a, b) => a.name.localeCompare(b.name));
+  } catch {
+    return [];
+  }
+}
+
+export async function readWorkspaceFile(name: string): Promise<string | null> {
+  try {
+    const safe = sanitizeFileName(name);
+    if (!safe.endsWith(".md")) return null;
+    return await readFile(join(workspaceDir, safe), "utf-8");
+  } catch {
+    return null;
+  }
+}
+
+export async function writeWorkspaceFile(name: string, content: string): Promise<void> {
+  const safe = sanitizeFileName(name);
+  if (!safe.endsWith(".md")) throw new Error("Only .md files can be written");
+  await writeFile(join(workspaceDir, safe), content, "utf-8");
+}
+
+export async function listMemoryFiles(): Promise<
+  { name: string; size: number; modified: string }[]
+> {
+  const memoryDir = join(workspaceDir, "memory");
+  try {
+    const files = await readdir(memoryDir);
+    const mdFiles = files.filter((f) => f.endsWith(".md"));
+    const results: { name: string; size: number; modified: string }[] = [];
+    for (const name of mdFiles) {
+      try {
+        const s = await stat(join(memoryDir, name));
+        results.push({ name, size: s.size, modified: s.mtime.toISOString() });
+      } catch { /* skip */ }
+    }
+    return results.sort((a, b) => b.name.localeCompare(a.name));
+  } catch {
+    return [];
+  }
+}
+
+export async function readMemoryFile(name: string): Promise<string | null> {
+  try {
+    const safe = sanitizeFileName(name);
+    if (!safe.endsWith(".md")) return null;
+    return await readFile(join(workspaceDir, "memory", safe), "utf-8");
+  } catch {
+    return null;
+  }
+}
+
+// ── Skills operations ──
+
+const skillsDir = join(stateDir, "skills");
+
+function sanitizeDirName(name: string): string {
+  const safe = name.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
+  if (!safe) {
+    throw new Error("Invalid directory name");
+  }
+  return safe;
+}
+
+export async function listSkills(): Promise<
+  { name: string; description: string; modified: string }[]
+> {
+  try {
+    const entries = await readdir(skillsDir, { withFileTypes: true });
+    const results: { name: string; description: string; modified: string }[] = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const skillFile = join(skillsDir, entry.name, "SKILL.md");
+      try {
+        const content = await readFile(skillFile, "utf-8");
+        const s = await stat(skillFile);
+        const descMatch = content.match(/^description:\s*["']?(.+?)["']?\s*$/m);
+        results.push({
+          name: entry.name,
+          description: descMatch?.[1] ?? "",
+          modified: s.mtime.toISOString(),
+        });
+      } catch { /* skip skills without SKILL.md */ }
+    }
+    return results.sort((a, b) => a.name.localeCompare(b.name));
+  } catch {
+    return [];
+  }
+}
+
+export async function readSkill(name: string): Promise<string | null> {
+  try {
+    const safe = sanitizeDirName(name);
+    return await readFile(join(skillsDir, safe, "SKILL.md"), "utf-8");
+  } catch {
+    return null;
+  }
+}
+
+export async function writeSkill(name: string, content: string): Promise<void> {
+  const safe = sanitizeDirName(name);
+  const dir = join(skillsDir, safe);
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, "SKILL.md"), content, "utf-8");
+}
+
+export async function deleteSkill(name: string): Promise<void> {
+  const safe = sanitizeDirName(name);
+  await rm(join(skillsDir, safe), { recursive: true, force: true });
+}
+
+// ── Usage / transcript aggregation ──
+
+interface UsageSummary {
+  byModel: Record<string, { messages: number; input: number; output: number }>;
+  byDay: Record<string, { input: number; output: number; messages: number }>;
+  totalInput: number;
+  totalOutput: number;
+  totalTokens: number;
+  messageCount: number;
+}
+
+export async function aggregateUsage(days: number = 7): Promise<UsageSummary> {
+  const sessionsDir = join(stateDir, "agents", "main", "sessions");
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+
+  const result: UsageSummary = {
+    byModel: {},
+    byDay: {},
+    totalInput: 0,
+    totalOutput: 0,
+    totalTokens: 0,
+    messageCount: 0,
+  };
+
+  try {
+    const files = await readdir(sessionsDir);
+    const jsonlFiles = files
+      .filter((f) => f.endsWith(".jsonl"))
+      .sort()
+      .reverse()
+      .slice(0, 50);
+
+    for (const file of jsonlFiles) {
+      try {
+        const content = await readFile(join(sessionsDir, file), "utf-8");
+        for (const line of content.split("\n")) {
+          if (!line.trim()) continue;
+          try {
+            const entry = JSON.parse(line);
+            if (entry?.type !== "message" || !entry?.message) continue;
+
+            const msg = entry.message;
+            const usage = msg.usage ?? entry.usage;
+            if (!usage) continue;
+
+            const input = usage.input_tokens ?? usage.inputTokens ?? 0;
+            const output = usage.output_tokens ?? usage.outputTokens ?? 0;
+            const model = msg.model ?? entry.model ?? "unknown";
+
+            // Extract date from timestamp or file name
+            let day: string;
+            if (entry.timestamp) {
+              const d = new Date(entry.timestamp);
+              if (d < cutoff) continue;
+              day = d.toISOString().slice(0, 10);
+            } else {
+              // Try to extract date from filename (sessionId-topic-timestamp.jsonl)
+              const tsMatch = file.match(/(\d{13})/);
+              if (tsMatch) {
+                const d = new Date(parseInt(tsMatch[1]));
+                if (d < cutoff) continue;
+                day = d.toISOString().slice(0, 10);
+              } else {
+                day = new Date().toISOString().slice(0, 10);
+              }
+            }
+
+            result.totalInput += input;
+            result.totalOutput += output;
+            result.totalTokens += input + output;
+            result.messageCount++;
+
+            if (!result.byModel[model]) {
+              result.byModel[model] = { messages: 0, input: 0, output: 0 };
+            }
+            result.byModel[model].messages++;
+            result.byModel[model].input += input;
+            result.byModel[model].output += output;
+
+            if (!result.byDay[day]) {
+              result.byDay[day] = { input: 0, output: 0, messages: 0 };
+            }
+            result.byDay[day].input += input;
+            result.byDay[day].output += output;
+            result.byDay[day].messages++;
+          } catch { /* skip bad lines */ }
+        }
+      } catch { /* skip unreadable files */ }
+    }
+  } catch { /* sessions dir not found */ }
+
+  return result;
+}
+
+// ── Tasks persistence ──
+
+const tasksPath = join(workspaceDir, "tasks.json");
+
+export interface TaskItem {
+  id: string;
+  title: string;
+  description?: string;
+  status: "queue" | "in_progress" | "needs_human" | "completed";
+  priority?: "low" | "medium" | "high";
+  labels?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface TasksFile {
+  version: number;
+  tasks: TaskItem[];
+}
+
+export async function readTasks(): Promise<TasksFile> {
+  try {
+    const raw = await readFile(tasksPath, "utf-8");
+    return JSON.parse(raw);
+  } catch {
+    return { version: 1, tasks: [] };
+  }
+}
+
+export async function writeTasks(data: TasksFile): Promise<void> {
+  await writeFile(tasksPath, JSON.stringify(data, null, 2) + "\n", "utf-8");
 }

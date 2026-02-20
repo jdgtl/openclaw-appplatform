@@ -9,6 +9,11 @@ import { chatRouter } from "./routes/chat.js";
 import { sessionsRouter } from "./routes/sessions.js";
 import { cronRouter } from "./routes/cron.js";
 import { systemRouter } from "./routes/system.js";
+import { configRouter } from "./routes/config.js";
+import { workspaceRouter } from "./routes/workspace.js";
+import { skillsRouter } from "./routes/skills.js";
+import { usageRouter } from "./routes/usage.js";
+import { tasksRouter } from "./routes/tasks.js";
 
 const port = parseInt(process.env.MC_PORT || "3333", 10);
 const gatewayPort = process.env.GATEWAY_PORT || "18789";
@@ -31,7 +36,7 @@ const gatewayWs = new GatewayWS(
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "5mb" }));
 
 // API routes
 app.use("/api/status", statusRouter(gateway));
@@ -39,6 +44,11 @@ app.use("/api/chat", chatRouter(gatewayWs));
 app.use("/api/sessions", sessionsRouter(gateway));
 app.use("/api/cron", cronRouter(gateway));
 app.use("/api/system", systemRouter(gateway));
+app.use("/api/config", configRouter(gateway));
+app.use("/api/workspace", workspaceRouter());
+app.use("/api/skills", skillsRouter());
+app.use("/api/usage", usageRouter());
+app.use("/api/tasks", tasksRouter());
 
 // Static files (frontend build output)
 const __dirname = dirname(fileURLToPath(import.meta.url));

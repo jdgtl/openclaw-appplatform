@@ -2,23 +2,9 @@ import { Router } from "express";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { GatewayClient } from "../gateway.js";
+import { unwrapToolResult } from "../lib/unwrap.js";
 
 const stateDir = process.env.OPENCLAW_STATE_DIR || "/data/.openclaw";
-
-// Unwrap the nested tool invoke response to get the actual data
-function unwrapToolResult(raw: unknown): unknown {
-  if (!raw || typeof raw !== "object") return raw;
-  const obj = raw as Record<string, unknown>;
-  const result = obj.result as Record<string, unknown> | undefined;
-  if (result?.details) return result.details;
-  if (result?.content && Array.isArray(result.content)) {
-    const text = (result.content[0] as Record<string, string>)?.text;
-    if (text) {
-      try { return JSON.parse(text); } catch { /* ignore */ }
-    }
-  }
-  return raw;
-}
 
 // Extract plain text from OpenClaw's content array format
 // Content can be: string | [{type: "text", text: "..."}, {type: "thinking", ...}]

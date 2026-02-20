@@ -3,6 +3,11 @@ import {
   LayoutDashboard,
   MessageSquare,
   Clock,
+  Settings,
+  Brain,
+  Puzzle,
+  BarChart3,
+  KanbanSquare,
   PanelLeftClose,
   PanelLeft,
 } from "lucide-react";
@@ -13,6 +18,11 @@ const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/chat", icon: MessageSquare, label: "Chat" },
   { to: "/cron", icon: Clock, label: "Cron" },
+  { to: "/tasks", icon: KanbanSquare, label: "Tasks" },
+  { to: "/memory", icon: Brain, label: "Memory" },
+  { to: "/skills", icon: Puzzle, label: "Skills" },
+  { to: "/usage", icon: BarChart3, label: "Usage" },
+  { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
 export function Sidebar() {
