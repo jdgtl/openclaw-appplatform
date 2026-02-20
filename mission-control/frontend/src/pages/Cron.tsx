@@ -22,7 +22,8 @@ interface CronJob {
   enabled: boolean;
   lastRun?: string;
   nextRun?: string;
-  command?: string;
+  message?: string;
+  sessionTarget?: string;
 }
 
 interface CronResponse {
@@ -100,13 +101,15 @@ export function Cron() {
               active
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-text-quaternary" />
-            <span className="text-sm text-text-secondary">
-              <strong className="text-text-primary">{disabledCount}</strong>{" "}
-              disabled
-            </span>
-          </div>
+          {disabledCount > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-text-quaternary" />
+              <span className="text-sm text-text-secondary">
+                <strong className="text-text-primary">{disabledCount}</strong>{" "}
+                disabled
+              </span>
+            </div>
+          )}
           <button
             onClick={() => setShowAdd(true)}
             className="ml-auto flex items-center gap-1.5 text-sm text-accent hover:text-accent/80 transition-colors"
@@ -161,6 +164,11 @@ export function Cron() {
                     </span>
                   )}
                 </div>
+                {job.message && (
+                  <p className="text-xs text-text-quaternary mt-1 truncate">
+                    {job.message}
+                  </p>
+                )}
               </div>
 
               {/* Actions */}
@@ -206,7 +214,7 @@ export function Cron() {
 function AddJobModal({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
   const [schedule, setSchedule] = useState("");
-  const [command, setCommand] = useState("");
+  const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -215,7 +223,7 @@ function AddJobModal({ onClose }: { onClose: () => void }) {
     setSaving(true);
     try {
       await postJSON("/cron", {
-        job: { name, schedule, command, enabled: true },
+        job: { name, schedule, message: message || undefined, enabled: true },
       });
       onClose();
     } catch {
@@ -266,11 +274,11 @@ function AddJobModal({ onClose }: { onClose: () => void }) {
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs text-text-tertiary">
-              Command / Prompt
+              Agent prompt
             </span>
             <textarea
-              value={command}
-              onChange={(e) => setCommand(e.target.value)}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
               placeholder="Write a daily summary of recent activity"
               rows={3}
               className="bg-surface-input text-sm text-text-primary rounded-lg px-3 py-2 outline-none border border-border-subtle focus:border-accent transition-colors resize-none"
