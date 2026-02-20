@@ -1,21 +1,35 @@
 #!/command/with-contenv bash
 # TCP proxy: bridges local HTTP to Tailscale Aperture via `tailscale nc`
 # Required because userspace networking (no TUN) can't route 100.x.x.x directly.
+# Only starts when ANTHROPIC_BASE_URL points to localhost (proxy mode).
 source /etc/s6-overlay/lib/env-utils.sh
 source_env_prefix TS_
+source_env_prefix OPENCLAW_
 
-# Node.js is installed via nvm — resolve the path
-NODE_BIN="$(ls /home/openclaw/.nvm/versions/node/*/bin/node 2>/dev/null | tail -1)"
-if [ -z "$NODE_BIN" ]; then
-  echo "[ts-proxy] ERROR: Node.js not found" >&2
-  s6-svc -Od .
-  exit 1
-fi
-
+# Only enable if Tailscale is running AND base URL points to local proxy
 if [ "${TAILSCALE_ENABLE:-false}" != "true" ]; then
   echo "[ts-proxy] Disabled (Tailscale not enabled)"
   s6-svc -Od .
   exit 0
+fi
+
+case "${ANTHROPIC_BASE_URL:-}" in
+  *127.0.0.1*|*localhost*)
+    echo "[ts-proxy] Proxy mode detected (ANTHROPIC_BASE_URL=$ANTHROPIC_BASE_URL)"
+    ;;
+  *)
+    echo "[ts-proxy] Disabled (ANTHROPIC_BASE_URL does not point to localhost)"
+    s6-svc -Od .
+    exit 0
+    ;;
+esac
+
+# Node.js is installed via nvm — resolve the path
+NODE_BIN="$(ls /home/openclaw/.nvm/versions/node/*/bin/node 2>/dev/null | tail -1)"
+if [ -z "$NODE_BIN" ]; then
+  echo "[ts-proxy] ERROR: Node.js not found, retrying in 30s" >&2
+  sleep 30
+  exit 1
 fi
 
 # Wait for Tailscale to be ready
