@@ -27,3 +27,4 @@ Thuopenclaws.db
 mission-control/*/node_modules/
 mission-control/*/dist/
 mission-control/server/dist/
+*.tsbuildinfo
