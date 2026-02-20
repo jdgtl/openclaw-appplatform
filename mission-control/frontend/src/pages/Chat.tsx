@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { PageShell } from "../components/PageShell.js";
 import { GlassCard } from "../components/GlassCard.js";
-import { usePolling, useSSEChat } from "../lib/hooks.js";
+import { usePolling, useWsChat, useGatewayStatus } from "../lib/hooks.js";
 import { fetchJSON } from "../lib/api.js";
 import {
   Search,
@@ -10,6 +10,7 @@ import {
   MessageSquare,
   ChevronRight,
   Plus,
+  WifiOff,
 } from "lucide-react";
 
 interface Session {
@@ -43,14 +44,15 @@ export function Chat() {
 
   // Active chat mode (new conversation or send to existing via WS)
   const [activeSessionKey, setActiveSessionKey] = useState<string | null>(null);
-  const { messages: sseMessages, streaming, send: sseSend, reset: sseReset } =
-    useSSEChat(activeSessionKey ?? undefined);
+  const { messages: wsMessages, streaming, send: wsSend, reset: wsReset } =
+    useWsChat(activeSessionKey ?? undefined);
+  const gatewayConnected = useGatewayStatus();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [history, sseMessages, streaming]);
+  }, [history, wsMessages, streaming]);
 
   const filteredSessions = sessions.filter(
     (s) =>
@@ -63,7 +65,7 @@ export function Chat() {
   const loadSession = async (key: string) => {
     setSelectedKey(key);
     setActiveSessionKey(key);
-    sseReset();
+    wsReset();
     setHistoryLoading(true);
     try {
       const data = await fetchJSON<{ messages: HistoryMessage[] }>(
@@ -80,20 +82,20 @@ export function Chat() {
   const startNewChat = () => {
     setSelectedKey(null);
     setActiveSessionKey("mc:chat");
-    sseReset();
+    wsReset();
     setHistory([]);
     setSendInput("");
   };
 
   const handleSend = () => {
     const text = sendInput.trim();
-    if (!text || streaming) return;
+    if (!text || streaming || !gatewayConnected) return;
     setSendInput("");
-    sseSend(text);
+    wsSend(text);
   };
 
-  // Combine history with live SSE messages
-  const allMessages = [...history, ...sseMessages];
+  // Combine history with live WS messages
+  const allMessages = [...history, ...wsMessages];
   const isActive = activeSessionKey !== null;
 
   return (
@@ -163,6 +165,12 @@ export function Chat() {
               <span className="text-sm text-text-secondary">
                 {selectedKey || "New Conversation"}
               </span>
+              {!gatewayConnected && (
+                <span className="ml-auto flex items-center gap-1.5 text-xs text-warning">
+                  <WifiOff size={12} />
+                  Gateway disconnected
+                </span>
+              )}
             </div>
           )}
 
@@ -215,7 +223,7 @@ export function Chat() {
                 />
                 <button
                   onClick={handleSend}
-                  disabled={streaming || !sendInput.trim()}
+                  disabled={streaming || !sendInput.trim() || !gatewayConnected}
                   className="text-accent disabled:opacity-30 transition-opacity"
                 >
                   <Send size={16} />

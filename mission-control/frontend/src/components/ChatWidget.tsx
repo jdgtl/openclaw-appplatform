@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageSquare, X, Send, Loader2 } from "lucide-react";
-import { useSSEChat } from "../lib/hooks.js";
+import { MessageSquare, X, Send, Loader2, WifiOff } from "lucide-react";
+import { useWsChat, useGatewayStatus } from "../lib/hooks.js";
 
 export function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
-  const { messages, streaming, send } = useSSEChat("mc:quick");
+  const { messages, streaming, send } = useWsChat("mc:quick");
+  const gatewayConnected = useGatewayStatus();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -15,7 +16,7 @@ export function ChatWidget() {
 
   const handleSend = () => {
     const text = input.trim();
-    if (!text || streaming) return;
+    if (!text || streaming || !gatewayConnected) return;
     setInput("");
     send(text);
   };
@@ -47,9 +48,14 @@ export function ChatWidget() {
           >
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-separator shrink-0">
-              <span className="text-sm font-medium text-text-primary">
-                Quick Chat
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-text-primary">
+                  Quick Chat
+                </span>
+                {!gatewayConnected && (
+                  <WifiOff size={12} className="text-warning" />
+                )}
+              </div>
               <button
                 onClick={() => setOpen(false)}
                 className="text-text-tertiary hover:text-text-primary"
@@ -100,7 +106,7 @@ export function ChatWidget() {
                 />
                 <button
                   onClick={handleSend}
-                  disabled={streaming || !input.trim()}
+                  disabled={streaming || !input.trim() || !gatewayConnected}
                   className="text-accent disabled:opacity-30 transition-opacity"
                 >
                   <Send size={14} />

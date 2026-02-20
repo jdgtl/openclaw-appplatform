@@ -1,5 +1,6 @@
 import WebSocket from "ws";
 import { randomUUID } from "node:crypto";
+import { EventEmitter } from "node:events";
 
 // ── Frame types ──────────────────────────────────────────────
 
@@ -56,7 +57,7 @@ interface RunListener {
 
 // ── Gateway WebSocket client ─────────────────────────────────
 
-export class GatewayWS {
+export class GatewayWS extends EventEmitter {
   private ws: WebSocket | null = null;
   private url: string;
   private token: string;
@@ -66,6 +67,7 @@ export class GatewayWS {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(url: string, token: string) {
+    super();
     this.url = url;
     this.token = token;
   }
@@ -112,6 +114,7 @@ export class GatewayWS {
           resolve: () => {
             clearTimeout(timeout);
             this.connected = true;
+            this.emit("status", { connected: true });
             console.log("[gateway-ws] Connected and authenticated");
             resolve();
           },
@@ -130,6 +133,7 @@ export class GatewayWS {
 
       ws.on("close", () => {
         this.connected = false;
+        this.emit("status", { connected: false });
         this.ws = null;
         // Reject all pending requests
         for (const [, req] of this.pendingReqs) {

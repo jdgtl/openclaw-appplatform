@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
 import { fetchJSON, postJSON } from "./api.js";
+import { mcWs } from "./ws-client.js";
 
 // Poll an API endpoint at a fixed interval
 export function usePolling<T>(
@@ -40,115 +41,90 @@ export function usePolling<T>(
   return { data, error, loading };
 }
 
-// SSE-based chat with the agent via gateway WebSocket proxy
+// WebSocket-based chat with the agent via persistent connection
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
 }
 
-export function useSSEChat(sessionKey?: string) {
+export function useWsChat(sessionKey?: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
-  const abortRef = useRef<AbortController | null>(null);
+  const activeKeyRef = useRef<string | null>(null);
+  const sessionRef = useRef(sessionKey);
+  sessionRef.current = sessionKey;
 
   const send = useCallback(
-    async (text: string) => {
-      const userMsg: ChatMessage = { role: "user", content: text };
-      setMessages((prev) => [...prev, userMsg]);
+    (text: string) => {
+      const key = sessionRef.current || "mc:chat";
+      setMessages((prev) => [...prev, { role: "user", content: text }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
       setStreaming(true);
 
-      try {
-        abortRef.current = new AbortController();
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: text,
-            sessionKey: sessionKey || "mc:chat",
-          }),
-          signal: abortRef.current.signal,
-        });
-
-        if (!res.ok || !res.body) {
-          const body = await res.text().catch(() => "");
-          throw new Error(body || `Chat failed: ${res.status}`);
-        }
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-
-        // Add placeholder for assistant response
-        setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-
-          for (const line of chunk.split("\n")) {
-            if (!line.startsWith("data: ")) continue;
-            const payload = line.slice(6);
-            if (payload === "[DONE]") continue;
-
-            try {
-              const parsed = JSON.parse(payload);
-
-              // Check for error events
-              if (parsed.error) {
-                setMessages((prev) => {
-                  const updated = [...prev];
-                  updated[updated.length - 1] = {
-                    role: "assistant",
-                    content: `Error: ${parsed.error.message}`,
-                  };
-                  return updated;
-                });
-                continue;
-              }
-
-              // Delta content — accumulated text from the server
-              const content = parsed.choices?.[0]?.delta?.content;
-              if (content != null) {
-                setMessages((prev) => {
-                  const updated = [...prev];
-                  updated[updated.length - 1] = {
-                    role: "assistant",
-                    content,
-                  };
-                  return updated;
-                });
-              }
-            } catch {
-              // non-JSON SSE line, skip
-            }
-          }
-        }
-      } catch (err) {
-        if ((err as Error).name !== "AbortError") {
-          setMessages((prev) => [
-            ...prev.filter((m) => m.content !== ""),
-            {
+      const id = mcWs.chatSend(key, text, {
+        onDelta: (accumulated) => {
+          setMessages((prev) => {
+            const updated = [...prev];
+            updated[updated.length - 1] = {
               role: "assistant",
-              content: `Error: ${(err as Error).message}`,
-            },
-          ]);
-        }
-      } finally {
-        setStreaming(false);
-        abortRef.current = null;
-      }
+              content: accumulated,
+            };
+            return updated;
+          });
+        },
+        onFinal: (finalText) => {
+          setMessages((prev) => {
+            const updated = [...prev];
+            updated[updated.length - 1] = {
+              role: "assistant",
+              content: finalText,
+            };
+            return updated;
+          });
+          setStreaming(false);
+          activeKeyRef.current = null;
+        },
+        onError: (error) => {
+          setMessages((prev) => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last && last.role === "assistant" && last.content === "") {
+              updated[updated.length - 1] = {
+                role: "assistant",
+                content: `Error: ${error}`,
+              };
+            } else {
+              updated.push({ role: "assistant", content: `Error: ${error}` });
+            }
+            return updated;
+          });
+          setStreaming(false);
+          activeKeyRef.current = null;
+        },
+      });
+      activeKeyRef.current = key;
     },
-    [sessionKey],
+    [],
   );
 
   const reset = useCallback(() => {
-    abortRef.current?.abort();
+    if (activeKeyRef.current) {
+      mcWs.chatAbort(activeKeyRef.current);
+      activeKeyRef.current = null;
+    }
     setMessages([]);
     setStreaming(false);
   }, []);
 
   return { messages, streaming, send, reset };
+}
+
+// Subscribe to gateway connection status
+export function useGatewayStatus(): boolean {
+  return useSyncExternalStore(
+    (cb) => mcWs.onStatus(cb),
+    () => mcWs.gatewayConnected,
+  );
 }
 
 // Trigger a manual fetch

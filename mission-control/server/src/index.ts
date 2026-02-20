@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { GatewayClient } from "./gateway.js";
 import { GatewayWS } from "./gateway-ws.js";
+import { attachBrowserWS } from "./browser-ws.js";
 import { statusRouter } from "./routes/status.js";
-import { chatRouter } from "./routes/chat.js";
 import { sessionsRouter } from "./routes/sessions.js";
 import { cronRouter } from "./routes/cron.js";
 import { systemRouter } from "./routes/system.js";
@@ -40,7 +40,6 @@ app.use(express.json({ limit: "5mb" }));
 
 // API routes
 app.use("/api/status", statusRouter(gateway));
-app.use("/api/chat", chatRouter(gatewayWs));
 app.use("/api/sessions", sessionsRouter(gateway));
 app.use("/api/cron", cronRouter(gateway));
 app.use("/api/system", systemRouter(gateway));
@@ -61,7 +60,7 @@ app.get("/{*path}", (_req, res) => {
   res.sendFile(join(frontendDir, "index.html"));
 });
 
-app.listen(port, async () => {
+const server = app.listen(port, async () => {
   console.log(`[mission-control] Listening on http://127.0.0.1:${port}`);
   console.log(`[mission-control] Gateway: ${gatewayBaseUrl}`);
 
@@ -76,3 +75,6 @@ app.listen(port, async () => {
     );
   }
 });
+
+// Browser WebSocket — multiplexes chat onto the gateway WS connection
+attachBrowserWS(server, gatewayWs);
