@@ -39,15 +39,18 @@ export function systemRouter(gateway: GatewayClient): Router {
     }
   });
 
-  // Restart the OpenClaw gateway (via s6 supervisor)
+  // Restart the OpenClaw gateway by killing the process (s6 auto-restarts it).
+  // Cannot use `sudo s6-svc` — DO App Platform sets "no new privileges" flag.
+  // Both MC and gateway run as `openclaw` user, so pkill works directly.
   router.post("/restart", async (_req, res) => {
     try {
       await new Promise<void>((resolve, reject) => {
         exec(
-          "sudo /command/s6-svc -r /run/service/openclaw",
-          { timeout: 10_000 },
+          "pkill -f 'openclaw gateway'",
+          { timeout: 5_000 },
           (error, _stdout, stderr) => {
-            if (error) reject(new Error(stderr || error.message));
+            // pkill exit 1 = no process matched — treat as success
+            if (error && error.code !== 1) reject(new Error(stderr || error.message));
             else resolve();
           },
         );
