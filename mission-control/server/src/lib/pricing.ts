@@ -9,6 +9,7 @@ export const MODEL_PRICING: Record<string, { inputPer1k: number; outputPer1k: nu
   "claude-opus-4-6": { inputPer1k: 0.015, outputPer1k: 0.075 },
   // OpenAI
   "gpt-5.3-codex": { inputPer1k: 0.00175, outputPer1k: 0.014 },
+  "gpt-oss-120b": { inputPer1k: 0.000039, outputPer1k: 0.00019 },
   "openai-gpt-o1s-128k": { inputPer1k: 0.015, outputPer1k: 0.06 },
   "openai-gpt-4o-128k": { inputPer1k: 0.005, outputPer1k: 0.015 },
   "openai-gpt-4o-mini-128k": { inputPer1k: 0.00015, outputPer1k: 0.0006 },

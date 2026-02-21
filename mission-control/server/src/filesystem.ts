@@ -300,9 +300,8 @@ export async function aggregateUsage(days: number = 7): Promise<UsageSummary> {
             result.byDay[day].output += output;
             result.byDay[day].messages++;
 
-            // Prefer pre-calculated cost from transcript, fall back to our estimate
-            const preCalcCost = typeof usage.cost?.total === "number" ? usage.cost.total : null;
-            const cost = preCalcCost ?? modelCost(model, input, output);
+            // Always use our pricing table (API-equivalent cost for subscription tracking)
+            const cost = modelCost(model, input, output);
             result.totalCost += cost;
             result.costByModel[model] = (result.costByModel[model] ?? 0) + cost;
           } catch { /* skip bad lines */ }
