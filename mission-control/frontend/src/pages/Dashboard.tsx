@@ -2,7 +2,8 @@ import { PageShell } from "../components/PageShell.js";
 import { StatusDot } from "../components/StatusDot.js";
 import { AnimCounter } from "../components/AnimCounter.js";
 import { Sparkline } from "../components/Sparkline.js";
-import { usePolling } from "../lib/hooks.js";
+import { HeartbeatLine } from "../components/HeartbeatLine.js";
+import { usePolling, useGatewayStatus } from "../lib/hooks.js";
 import { postJSON } from "../lib/api.js";
 import { useState, useMemo, useRef } from "react";
 import {
@@ -100,9 +101,13 @@ function makeSparkData(base: number) {
 }
 
 export function Dashboard() {
-  const { data, loading } = usePolling<StatusData>("/status", 30_000);
+  const { data, loading, error: pollError } = usePolling<StatusData>("/status", 30_000);
   const { data: usageData } = usePolling<UsageData>("/usage/summary?days=14", 60_000);
   const { data: sysInfo } = usePolling<SystemInfo>("/system/info", 30_000);
+  const gwConnected = useGatewayStatus();
+
+  // Real-time connectivity: WebSocket connected AND poll not erroring
+  const isAlive = gwConnected && !pollError;
 
   // Stable spark data — only regenerated when base values change significantly
   const msgSparkRef = useRef(makeSparkData(30));
@@ -169,10 +174,10 @@ export function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Agent Status"
-          value={data?.agent?.name ?? "Offline"}
+          value={isAlive ? (data?.agent?.name ?? "Agent") : "Offline"}
           sub={data?.agent?.model ?? data?.agent?.version ?? "—"}
-          accent="#22c55e"
-          status={data?.agent?.status}
+          accent={isAlive ? "#22c55e" : "#ef4444"}
+          heartbeat={isAlive}
         />
         <StatCard
           label="Active Sessions"
@@ -379,6 +384,7 @@ function StatCard({
   status,
   spark,
   sparkColor,
+  heartbeat,
 }: {
   label: string;
   value: string | number;
@@ -387,6 +393,7 @@ function StatCard({
   status?: string;
   spark?: { v: number }[];
   sparkColor?: string;
+  heartbeat?: boolean;
 }) {
   return (
     <div
@@ -408,7 +415,12 @@ function StatCard({
         {typeof value === "number" ? <AnimCounter target={value} /> : value}
       </div>
       <div className="text-xs text-text-dim mt-1">{sub}</div>
-      {spark && sparkColor && (
+      {heartbeat !== undefined && (
+        <div className="absolute bottom-0 left-0 right-0 h-10 opacity-60">
+          <HeartbeatLine alive={heartbeat} />
+        </div>
+      )}
+      {spark && sparkColor && heartbeat === undefined && (
         <div className="absolute bottom-0 left-0 right-0 h-10 opacity-50">
           <Sparkline data={spark} color={sparkColor} height={40} />
         </div>

@@ -400,3 +400,105 @@ export async function detectOpenClawVersion(): Promise<string> {
   cachedOpenClawVersion = "unknown";
   return "unknown";
 }
+
+// ── Skill usage aggregation ──
+
+export interface SkillUsageSummary {
+  bySkill: Record<string, { count: number; lastUsed: string | null }>;
+  byDay: Record<string, Record<string, number>>;
+  totalInvocations: number;
+}
+
+export async function aggregateSkillUsage(days: number = 30): Promise<SkillUsageSummary> {
+  const sessionsDir = join(stateDir, "agents", "main", "sessions");
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+
+  const result: SkillUsageSummary = {
+    bySkill: {},
+    byDay: {},
+    totalInvocations: 0,
+  };
+
+  try {
+    const files = await readdir(sessionsDir);
+    const jsonlFiles = files
+      .filter((f) => f.endsWith(".jsonl"))
+      .sort()
+      .reverse()
+      .slice(0, 50);
+
+    for (const file of jsonlFiles) {
+      try {
+        const content = await readFile(join(sessionsDir, file), "utf-8");
+        for (const line of content.split("\n")) {
+          if (!line.trim()) continue;
+          try {
+            const entry = JSON.parse(line);
+            if (entry?.type !== "message" || !entry?.message) continue;
+
+            const msg = entry.message;
+            const contentArr = msg.content;
+            if (!Array.isArray(contentArr)) continue;
+
+            // Extract date
+            let day: string | null = null;
+            if (entry.timestamp) {
+              const d = new Date(entry.timestamp);
+              if (d < cutoff) continue;
+              day = d.toISOString().slice(0, 10);
+            } else {
+              const tsMatch = file.match(/(\d{13})/);
+              if (tsMatch) {
+                const d = new Date(parseInt(tsMatch[1]));
+                if (d < cutoff) continue;
+                day = d.toISOString().slice(0, 10);
+              } else {
+                day = new Date().toISOString().slice(0, 10);
+              }
+            }
+
+            for (const item of contentArr) {
+              if (item?.type !== "tool_use" || !item?.name) continue;
+              const skillName = item.name as string;
+
+              result.totalInvocations++;
+
+              if (!result.bySkill[skillName]) {
+                result.bySkill[skillName] = { count: 0, lastUsed: null };
+              }
+              result.bySkill[skillName].count++;
+              if (day && (!result.bySkill[skillName].lastUsed || day > result.bySkill[skillName].lastUsed!)) {
+                result.bySkill[skillName].lastUsed = day;
+              }
+
+              if (day) {
+                if (!result.byDay[day]) result.byDay[day] = {};
+                result.byDay[day][skillName] = (result.byDay[day][skillName] ?? 0) + 1;
+              }
+            }
+          } catch { /* skip bad lines */ }
+        }
+      } catch { /* skip unreadable files */ }
+    }
+  } catch { /* sessions dir not found */ }
+
+  return result;
+}
+
+// ── Category derivation ──
+
+const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  Development: ["code", "dev", "build", "compile", "lint", "test", "debug", "runner", "git"],
+  Communication: ["slack", "email", "chat", "message", "notify", "whatsapp", "discord", "telegram"],
+  Data: ["data", "scrape", "fetch", "api", "web", "search", "query", "seo", "audit"],
+  System: ["cron", "session", "config", "backup", "monitor", "health", "system"],
+};
+
+export function deriveCategory(name: string, description: string): string {
+  const text = `${name} ${description}`.toLowerCase();
+  for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    if (keywords.some((kw) => text.includes(kw))) return category;
+  }
+  return "Custom";
+}

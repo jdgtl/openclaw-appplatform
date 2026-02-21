@@ -4,12 +4,112 @@ import {
   readSkill,
   writeSkill,
   deleteSkill,
+  readConfig,
+  aggregateSkillUsage,
+  deriveCategory,
 } from "../filesystem.js";
 
 export function skillsRouter(): Router {
   const router = Router();
 
-  // List all skills
+  // ── New endpoints (MUST be before /:name) ──
+
+  // Skill usage aggregation
+  router.get("/usage", async (req, res) => {
+    const days = Math.min(Math.max(parseInt(String(req.query.days)) || 30, 1), 365);
+    try {
+      const data = await aggregateSkillUsage(days);
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({
+        error: err instanceof Error ? err.message : "Failed to aggregate skill usage",
+      });
+    }
+  });
+
+  // Unified skill list (custom + built-in + usage)
+  router.get("/all", async (req, res) => {
+    const days = Math.min(Math.max(parseInt(String(req.query.days)) || 30, 1), 365);
+    try {
+      const [customSkills, config, usage] = await Promise.all([
+        listSkills(),
+        readConfig(),
+        aggregateSkillUsage(days),
+      ]);
+
+      const skills: {
+        name: string;
+        description: string;
+        source: "custom" | "built-in";
+        category: string;
+        modified: string | null;
+        usageCount: number;
+        lastUsed: string | null;
+      }[] = [];
+
+      // Add custom skills
+      for (const s of customSkills) {
+        const su = usage.bySkill[s.name];
+        skills.push({
+          name: s.name,
+          description: s.description,
+          source: "custom",
+          category: deriveCategory(s.name, s.description),
+          modified: s.modified,
+          usageCount: su?.count ?? 0,
+          lastUsed: su?.lastUsed ?? null,
+        });
+      }
+
+      // Extract built-in commands/skills from config
+      const customNames = new Set(customSkills.map((s) => s.name));
+      if (config) {
+        const commands = config.commands as Record<string, unknown> | undefined;
+        if (commands && typeof commands === "object") {
+          for (const [name, value] of Object.entries(commands)) {
+            if (customNames.has(name)) continue;
+            const desc = (value && typeof value === "object")
+              ? ((value as Record<string, unknown>).description as string) ?? ""
+              : "";
+            const su = usage.bySkill[name];
+            skills.push({
+              name,
+              description: desc,
+              source: "built-in",
+              category: deriveCategory(name, desc),
+              modified: null,
+              usageCount: su?.count ?? 0,
+              lastUsed: su?.lastUsed ?? null,
+            });
+          }
+        }
+      }
+
+      // Also surface any skills from usage that aren't in either list
+      for (const [name, su] of Object.entries(usage.bySkill)) {
+        if (skills.some((s) => s.name === name)) continue;
+        skills.push({
+          name,
+          description: "",
+          source: "built-in",
+          category: deriveCategory(name, ""),
+          modified: null,
+          usageCount: su.count,
+          lastUsed: su.lastUsed,
+        });
+      }
+
+      res.json({ skills, usage });
+    } catch (err) {
+      res.status(500).json({
+        error: err instanceof Error ? err.message : "Failed to list all skills",
+      });
+    }
+  });
+
+  // ── Existing CRUD endpoints ──
+
+  // List custom skills
   router.get("/", async (_req, res) => {
     try {
       const skills = await listSkills();
