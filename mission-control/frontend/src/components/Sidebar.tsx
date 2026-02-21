@@ -13,6 +13,7 @@ import {
 import { useState } from "react";
 import { ThemeToggle } from "./ThemeToggle.js";
 import { StatusDot } from "./StatusDot.js";
+import { usePolling } from "../lib/hooks.js";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -25,8 +26,15 @@ const navItems = [
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
+interface StatusBrief {
+  agent: { name: string | null; status: string };
+}
+
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
+  const { data: status } = usePolling<StatusBrief>("/status", 30_000);
+  const agentName = status?.agent?.name ?? "Agent";
+  const agentStatus = status?.agent?.status === "active" ? "active" as const : "error" as const;
 
   return (
     <aside
@@ -45,14 +53,14 @@ export function Sidebar() {
               Mission Control
             </span>
             <div className="flex items-center gap-1.5 mt-0.5">
-              <StatusDot status="active" size={6} />
-              <span className="text-[11px] text-accent">Clawdius</span>
+              <StatusDot status={agentStatus} size={6} />
+              <span className="text-[11px] text-accent">{agentName}</span>
             </div>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-1">
             <span className="text-[11px] font-bold text-text">MC</span>
-            <StatusDot status="active" size={6} />
+            <StatusDot status={agentStatus} size={6} />
           </div>
         )}
       </div>

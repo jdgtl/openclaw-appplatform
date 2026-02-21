@@ -1,0 +1,2 @@
+# Allow openclaw user to restart the gateway service via Mission Control
+openclaw ALL=(root) NOPASSWD: /command/s6-svc -r /run/service/openclaw

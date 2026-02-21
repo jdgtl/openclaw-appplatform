@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { exec } from "node:child_process";
 import { readHeartbeat } from "../filesystem.js";
 import type { GatewayClient } from "../gateway.js";
 
@@ -34,6 +35,27 @@ export function systemRouter(gateway: GatewayClient): Router {
     } catch (err) {
       res.status(502).json({
         error: err instanceof Error ? err.message : "Failed to wake agent",
+      });
+    }
+  });
+
+  // Restart the OpenClaw gateway (via s6 supervisor)
+  router.post("/restart", async (_req, res) => {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        exec(
+          "sudo /command/s6-svc -r /run/service/openclaw",
+          { timeout: 10_000 },
+          (error, _stdout, stderr) => {
+            if (error) reject(new Error(stderr || error.message));
+            else resolve();
+          },
+        );
+      });
+      res.json({ ok: true, message: "Gateway restart initiated" });
+    } catch (err) {
+      res.status(500).json({
+        error: err instanceof Error ? err.message : "Failed to restart gateway",
       });
     }
   });

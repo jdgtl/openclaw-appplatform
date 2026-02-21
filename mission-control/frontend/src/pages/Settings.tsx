@@ -3,6 +3,7 @@ import { PageShell } from "../components/PageShell.js";
 import { TextEditor } from "../components/TextEditor.js";
 import { usePolling } from "../lib/hooks.js";
 import { fetchJSON, putJSON, postJSON } from "../lib/api.js";
+import { ConfirmDialog } from "../components/ConfirmDialog.js";
 import {
   Settings as SettingsIcon,
   Save,
@@ -14,6 +15,7 @@ import {
   AlertTriangle,
   ToggleLeft,
   ToggleRight,
+  RotateCcw,
 } from "lucide-react";
 
 interface SystemInfo {
@@ -39,6 +41,10 @@ export function Settings() {
   const [heartbeatInterval, setHeartbeatInterval] = useState("30");
   const [heartbeatSaving, setHeartbeatSaving] = useState(false);
   const [heartbeatRunning, setHeartbeatRunning] = useState(false);
+
+  // Gateway restart
+  const [restartConfirm, setRestartConfirm] = useState(false);
+  const [restarting, setRestarting] = useState(false);
 
   const loadConfig = useCallback(async () => {
     try {
@@ -108,6 +114,21 @@ export function Settings() {
       // ignore
     } finally {
       setHeartbeatRunning(false);
+    }
+  };
+
+  const handleRestart = async () => {
+    setRestarting(true);
+    setRestartConfirm(false);
+    setError(null);
+    try {
+      await postJSON("/system/restart", {});
+      setSuccess("Gateway restart initiated — reconnecting...");
+      setTimeout(() => setSuccess(null), 8000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to restart gateway");
+    } finally {
+      setRestarting(false);
     }
   };
 
@@ -301,9 +322,34 @@ export function Settings() {
             ) : (
               <p className="text-sm text-text-faint">Loading...</p>
             )}
+
+            <div className="mt-4 pt-4 border-t border-border">
+              <button
+                onClick={() => setRestartConfirm(true)}
+                disabled={restarting}
+                className="flex items-center gap-1.5 text-xs text-danger hover:text-white hover:bg-danger px-3 py-1.5 rounded-lg border border-danger/30 transition-all disabled:opacity-50"
+              >
+                {restarting ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <RotateCcw size={12} />
+                )}
+                Restart Gateway
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={restartConfirm}
+        title="Restart Gateway"
+        message="This will restart the OpenClaw gateway. Active sessions will be interrupted and the agent will be briefly unavailable."
+        confirmLabel="Restart"
+        danger
+        onConfirm={handleRestart}
+        onCancel={() => setRestartConfirm(false)}
+      />
     </PageShell>
   );
 }
