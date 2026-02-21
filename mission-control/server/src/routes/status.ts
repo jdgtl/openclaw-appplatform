@@ -72,6 +72,9 @@ export function statusRouter(gateway: GatewayClient): Router {
       models: configVal
         ? extractModels(configVal)
         : null,
+      providers: configVal
+        ? extractProviders(configVal)
+        : [],
       activity:
         activity.status === "fulfilled" ? activity.value : [],
       timestamp: now,
@@ -93,15 +96,17 @@ function extractAgentName(config: Record<string, unknown> | null): string | null
 
 function extractChannels(
   config: Record<string, unknown>,
-): Record<string, { enabled: boolean }> {
-  const channels: Record<string, { enabled: boolean }> = {};
+): Record<string, { enabled: boolean; status: "active" | "paused" | "error" }> {
+  const channels: Record<string, { enabled: boolean; status: "active" | "paused" | "error" }> = {};
   const ch = config.channels as Record<string, unknown> | undefined;
   if (!ch) return channels;
 
   for (const [name, value] of Object.entries(ch)) {
     if (value && typeof value === "object") {
+      const enabled = (value as Record<string, unknown>).enabled !== false;
       channels[name] = {
-        enabled: (value as Record<string, unknown>).enabled !== false,
+        enabled,
+        status: enabled ? "active" : "paused",
       };
     }
   }
@@ -113,4 +118,31 @@ function extractModels(
 ): unknown {
   const models = config.models ?? config.providers;
   return models ?? null;
+}
+
+function extractProviders(
+  config: Record<string, unknown>,
+): { name: string; models: number; status: string }[] {
+  const models = config.models as Record<string, unknown> | undefined;
+  if (!models) return [];
+
+  const providers = models.providers as Record<string, unknown> | undefined;
+  if (!providers || typeof providers !== "object") return [];
+
+  const result: { name: string; models: number; status: string }[] = [];
+  for (const [name, value] of Object.entries(providers)) {
+    if (value && typeof value === "object") {
+      const providerConfig = value as Record<string, unknown>;
+      // Count models: look for a "models" array or object within the provider config
+      const providerModels = providerConfig.models;
+      let modelCount = 0;
+      if (Array.isArray(providerModels)) {
+        modelCount = providerModels.length;
+      } else if (providerModels && typeof providerModels === "object") {
+        modelCount = Object.keys(providerModels).length;
+      }
+      result.push({ name, models: modelCount, status: "active" });
+    }
+  }
+  return result;
 }

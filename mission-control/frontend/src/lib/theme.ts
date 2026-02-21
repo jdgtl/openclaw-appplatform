@@ -1,19 +1,19 @@
 import { useState, useEffect, useCallback } from "react";
 
-export type Theme = "navy" | "oled" | "light";
+export type Theme = "dark" | "light";
 
 const STORAGE_KEY = "mc-theme";
 
 function getStoredTheme(): Theme {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === "navy" || stored === "oled" || stored === "light") {
+    if (stored === "dark" || stored === "light") {
       return stored;
     }
   } catch {
     // localStorage unavailable
   }
-  return "navy";
+  return "dark";
 }
 
 function applyTheme(theme: Theme) {

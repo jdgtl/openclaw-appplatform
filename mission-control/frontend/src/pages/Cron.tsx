@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { PageShell } from "../components/PageShell.js";
-import { GlassCard } from "../components/GlassCard.js";
-import { StatusBadge } from "../components/StatusBadge.js";
+import { StatusDot } from "../components/StatusDot.js";
+import { ConfirmDialog } from "../components/ConfirmDialog.js";
+import { Modal, FormLabel, FormInput, FormSelect, FormTextarea, ModalActions } from "../components/Modal.js";
 import { usePolling } from "../lib/hooks.js";
 import { fetchJSON, postJSON, deleteJSON } from "../lib/api.js";
 import {
@@ -9,11 +10,9 @@ import {
   Play,
   Trash2,
   Plus,
-  X,
   Loader2,
   ToggleLeft,
   ToggleRight,
-  ChevronRight,
 } from "lucide-react";
 
 interface CronJob {
@@ -33,6 +32,8 @@ interface CronJob {
   timeout?: number;
   channel?: string;
   to?: string;
+  category?: string;
+  runCount?: number;
 }
 
 interface CronResponse {
@@ -44,9 +45,21 @@ export function Cron() {
   const jobs = data?.jobs ?? [];
   const [showAdd, setShowAdd] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const activeCount = jobs.filter((j) => j.enabled).length;
   const disabledCount = jobs.filter((j) => !j.enabled).length;
+
+  // Group jobs by category
+  const grouped = useMemo(() => {
+    const map: Record<string, CronJob[]> = {};
+    for (const job of jobs) {
+      const cat = job.category || "General";
+      if (!map[cat]) map[cat] = [];
+      map[cat].push(job);
+    }
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
+  }, [jobs]);
 
   const handleToggle = useCallback(async (job: CronJob) => {
     setActionLoading(job.id);
@@ -70,22 +83,23 @@ export function Cron() {
     }
   }, []);
 
-  const handleDelete = useCallback(async (id: string) => {
-    if (!confirm("Delete this cron job?")) return;
-    setActionLoading(id);
+  const handleDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    setActionLoading(deleteTarget);
     try {
-      await deleteJSON(`/cron/${id}`);
+      await deleteJSON(`/cron/${deleteTarget}`);
+      setDeleteTarget(null);
     } catch {
       // ignore
     } finally {
       setActionLoading(null);
     }
-  }, []);
+  }, [deleteTarget]);
 
   if (loading && !data) {
     return (
       <PageShell title="Cron Jobs">
-        <div className="flex items-center justify-center h-64 text-text-tertiary">
+        <div className="flex items-center justify-center h-64 text-text-dim">
           <Loader2 size={24} className="animate-spin" />
         </div>
       </PageShell>
@@ -95,146 +109,144 @@ export function Cron() {
   return (
     <PageShell title="Cron Jobs">
       {/* Summary bar */}
-      <GlassCard>
-        <div className="flex items-center gap-6 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Clock size={16} className="text-accent" />
-            <span className="text-sm text-text-secondary">
-              <strong className="text-text-primary">{jobs.length}</strong> total
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-success" />
-            <span className="text-sm text-text-secondary">
-              <strong className="text-text-primary">{activeCount}</strong>{" "}
-              active
-            </span>
-          </div>
+      <div className="flex items-center justify-between">
+        <div className="flex gap-4 text-[13px]">
+          <span className="text-text-dim">{jobs.length} total</span>
+          <span className="text-success">{activeCount} active</span>
           {disabledCount > 0 && (
-            <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-text-quaternary" />
-              <span className="text-sm text-text-secondary">
-                <strong className="text-text-primary">{disabledCount}</strong>{" "}
-                disabled
-              </span>
-            </div>
+            <span className="text-text-faint">{disabledCount} disabled</span>
           )}
-          <button
-            onClick={() => setShowAdd(true)}
-            className="ml-auto flex items-center gap-1.5 text-sm text-accent hover:text-accent/80 transition-colors"
-          >
-            <Plus size={14} />
-            Add Job
-          </button>
         </div>
-      </GlassCard>
-
-      {/* Job list */}
-      <div className="flex flex-col gap-2">
-        {jobs.map((job) => (
-          <GlassCard key={job.id} className="!p-4">
-            <div className="flex items-center gap-4">
-              {/* Toggle */}
-              <button
-                onClick={() => handleToggle(job)}
-                disabled={actionLoading === job.id}
-                className="shrink-0 text-text-secondary hover:text-text-primary transition-colors"
-              >
-                {job.enabled ? (
-                  <ToggleRight size={22} className="text-success" />
-                ) : (
-                  <ToggleLeft size={22} />
-                )}
-              </button>
-
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-text-primary truncate">
-                    {job.name || job.id}
-                  </p>
-                  <StatusBadge
-                    status={job.enabled ? "active" : "disabled"}
-                    label={job.enabled ? "active" : "off"}
-                  />
-                  {job.sessionTarget && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-control text-text-quaternary">
-                      {job.sessionTarget}
-                    </span>
-                  )}
-                </div>
-                {job.description && (
-                  <p className="text-xs text-text-secondary mt-0.5 truncate">
-                    {job.description}
-                  </p>
-                )}
-                <p className="text-xs text-text-tertiary font-mono mt-0.5">
-                  {job.schedule}
-                </p>
-                <div className="flex gap-4 mt-1 text-xs text-text-quaternary">
-                  {job.lastRun && (
-                    <span>
-                      Last: {new Date(job.lastRun).toLocaleString()}
-                    </span>
-                  )}
-                  {job.nextRun && (
-                    <span>
-                      Next: {new Date(job.nextRun).toLocaleString()}
-                    </span>
-                  )}
-                </div>
-                {job.message && (
-                  <p className="text-xs text-text-quaternary mt-1 truncate">
-                    {job.message}
-                  </p>
-                )}
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  onClick={() => handleRun(job.id)}
-                  disabled={actionLoading === job.id}
-                  title="Run Now"
-                  className="p-1.5 rounded-lg text-text-tertiary hover:text-accent hover:bg-surface-control transition-colors"
-                >
-                  {actionLoading === job.id ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : (
-                    <Play size={14} />
-                  )}
-                </button>
-                <button
-                  onClick={() => handleDelete(job.id)}
-                  disabled={actionLoading === job.id}
-                  title="Delete"
-                  className="p-1.5 rounded-lg text-text-tertiary hover:text-danger hover:bg-surface-control transition-colors"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
-          </GlassCard>
-        ))}
-
-        {jobs.length === 0 && (
-          <div className="text-center text-text-quaternary text-sm py-12">
-            No cron jobs configured
-          </div>
-        )}
+        <button
+          onClick={() => setShowAdd(true)}
+          className="flex items-center gap-1.5 px-4 py-2 bg-accent-bg border border-accent-border rounded-lg text-xs font-medium text-accent hover:bg-accent/15 transition-colors"
+        >
+          <Plus size={14} />
+          Add Job
+        </button>
       </div>
+
+      {/* Grouped job list */}
+      {grouped.map(([category, catJobs]) => (
+        <div key={category}>
+          {/* Category header */}
+          <div className="flex items-center gap-2 mb-2.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-accent">
+              {category}
+            </span>
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-[11px] text-text-dim">{catJobs.length}</span>
+          </div>
+
+          {/* Job rows */}
+          <div className="flex flex-col gap-2 mb-6">
+            {catJobs.map((job) => (
+              <div
+                key={job.id}
+                className="bg-card-bg border border-border rounded-xl px-5 py-4 grid grid-cols-[1.5fr_1fr_1fr_auto_auto] items-center gap-5 transition-all duration-200 hover:border-border-hover"
+              >
+                {/* Name + schedule */}
+                <div>
+                  <div className="text-sm font-medium text-text mb-0.5">
+                    {job.name || job.id}
+                  </div>
+                  {job.description && (
+                    <div className="text-[11px] text-text-dim">{job.description}</div>
+                  )}
+                  <div className="text-xs font-mono text-accent mt-1">{job.schedule}</div>
+                </div>
+
+                {/* Last run */}
+                <div>
+                  <div className="text-[10px] text-text-faint uppercase tracking-wider mb-0.5">
+                    Last Run
+                  </div>
+                  <div className="text-xs text-text-muted">
+                    {job.lastRun ? new Date(job.lastRun).toLocaleString() : "—"}
+                  </div>
+                </div>
+
+                {/* Next run */}
+                <div>
+                  <div className="text-[10px] text-text-faint uppercase tracking-wider mb-0.5">
+                    Next Run
+                  </div>
+                  <div className="text-xs text-text-muted">
+                    {job.nextRun ? new Date(job.nextRun).toLocaleString() : "—"}
+                  </div>
+                </div>
+
+                {/* Run count */}
+                <div className="text-center">
+                  <div className="text-[10px] text-text-faint uppercase tracking-wider mb-0.5">
+                    Runs
+                  </div>
+                  <div className="text-xs text-text-muted font-mono tabular-nums">
+                    {job.runCount ?? "—"}
+                  </div>
+                </div>
+
+                {/* Status + toggle */}
+                <div className="flex items-center gap-2.5">
+                  <StatusDot status={job.enabled ? "active" : "paused"} />
+                  <button
+                    onClick={() => handleToggle(job)}
+                    disabled={actionLoading === job.id}
+                    className="w-[30px] h-[30px] rounded-md border border-border bg-surface flex items-center justify-center text-text-muted hover:text-text hover:border-border-hover transition-colors"
+                  >
+                    {actionLoading === job.id ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : job.enabled ? (
+                      <ToggleRight size={14} className="text-success" />
+                    ) : (
+                      <ToggleLeft size={14} />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleRun(job.id)}
+                    disabled={actionLoading === job.id}
+                    title="Run Now"
+                    className="w-[30px] h-[30px] rounded-md border border-border bg-surface flex items-center justify-center text-text-muted hover:text-accent hover:border-border-hover transition-colors"
+                  >
+                    <Play size={14} />
+                  </button>
+                  <button
+                    onClick={() => setDeleteTarget(job.id)}
+                    disabled={actionLoading === job.id}
+                    title="Delete"
+                    className="w-[30px] h-[30px] rounded-md border border-border bg-surface flex items-center justify-center text-text-muted hover:text-danger hover:border-border-hover transition-colors"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {jobs.length === 0 && (
+        <div className="text-center text-text-faint text-sm py-12">
+          No cron jobs configured
+        </div>
+      )}
+
+      {/* Delete Confirm */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete Cron Job"
+        message="Delete this cron job? This cannot be undone."
+        confirmLabel="Delete"
+        danger
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
 
       {/* Add Job Modal */}
       {showAdd && <AddJobModal onClose={() => setShowAdd(false)} />}
     </PageShell>
   );
 }
-
-const INPUT =
-  "bg-surface-input text-sm text-text-primary rounded-lg px-3 py-2 outline-none border border-border-subtle focus:border-accent transition-colors w-full";
-const LABEL = "text-xs text-text-tertiary font-medium";
-const SECTION =
-  "text-[11px] font-semibold text-text-quaternary uppercase tracking-wider";
 
 interface CronOptions {
   agents: string[];
@@ -244,48 +256,32 @@ interface CronOptions {
 }
 
 function AddJobModal({ onClose }: { onClose: () => void }) {
-  // Dynamic options from server
   const [opts, setOpts] = useState<CronOptions | null>(null);
   useEffect(() => {
     fetchJSON<CronOptions>("/cron/options").then(setOpts).catch(() => {});
   }, []);
 
-  // Identity
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("General");
   const [enabled, setEnabled] = useState(true);
-
-  // Schedule
   const [scheduleKind, setScheduleKind] = useState<"every" | "cron">("every");
   const [everyValue, setEveryValue] = useState("30");
   const [everyUnit, setEveryUnit] = useState("minutes");
   const [cronExpr, setCronExpr] = useState("");
-
-  // Execution
   const [agentId, setAgentId] = useState("default");
   const [session, setSession] = useState("isolated");
   const [wakeMode, setWakeMode] = useState("now");
   const [model, setModel] = useState("");
-
-  // Payload
   const [payloadKind, setPayloadKind] = useState("agentTurn");
   const [message, setMessage] = useState("");
-
-  // Delivery (advanced)
-  const [showDelivery, setShowDelivery] = useState(false);
-  const [delivery, setDelivery] = useState("announce-summary");
-  const [timeoutSec, setTimeoutSec] = useState("");
-  const [channel, setChannel] = useState("last");
-  const [to, setTo] = useState("");
-
   const [saving, setSaving] = useState(false);
 
   const isValid =
     name.trim() &&
     (scheduleKind === "every" ? Number(everyValue) > 0 : cronExpr.trim());
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     if (!isValid) return;
     setSaving(true);
     try {
@@ -298,6 +294,7 @@ function AddJobModal({ onClose }: { onClose: () => void }) {
         job: {
           name,
           description: description || undefined,
+          category: category || undefined,
           agentId: agentId || undefined,
           enabled,
           schedule,
@@ -305,12 +302,7 @@ function AddJobModal({ onClose }: { onClose: () => void }) {
           wakeMode,
           model: model || undefined,
           payloadKind,
-          message:
-            payloadKind === "agentTurn" ? message || undefined : undefined,
-          delivery: showDelivery ? delivery || undefined : undefined,
-          timeout: showDelivery && timeoutSec ? Number(timeoutSec) : undefined,
-          channel: showDelivery ? channel || undefined : undefined,
-          to: showDelivery && to ? to : undefined,
+          message: payloadKind === "agentTurn" ? message || undefined : undefined,
         },
       });
       onClose();
@@ -322,317 +314,147 @@ function AddJobModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="glass-window w-full max-w-lg mx-4 max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-separator shrink-0">
-          <h2 className="text-sm font-semibold text-text-primary">
-            New Cron Job
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-text-tertiary hover:text-text-primary"
-          >
-            <X size={16} />
-          </button>
+    <Modal open onClose={onClose} title="New Cron Job">
+      <div className="p-6 flex flex-col gap-5">
+        {/* Identity */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <FormLabel>Name</FormLabel>
+            <FormInput value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Daily summary" />
+          </div>
+          <div>
+            <FormLabel>Description</FormLabel>
+            <FormInput value={description} onChange={(e) => setDescription(e.currentTarget.value)} placeholder="Optional" />
+          </div>
         </div>
 
-        {/* Scrollable body */}
-        <form
-          onSubmit={handleSubmit}
-          className="p-5 flex flex-col gap-5 overflow-y-auto"
-        >
-          {/* ── Identity ── */}
-          <div className="flex gap-3">
-            <label className="flex flex-col gap-1 flex-1">
-              <span className={LABEL}>Name</span>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Daily summary"
-                className={INPUT}
-                required
-              />
-            </label>
-            <label className="flex flex-col gap-1 flex-1">
-              <span className={LABEL}>Description</span>
-              <input
-                type="text"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Optional"
-                className={INPUT}
-              />
-            </label>
-          </div>
+        <div>
+          <FormLabel>Category</FormLabel>
+          <FormSelect value={category} onChange={(e) => setCategory(e.currentTarget.value)}>
+            <option value="General">General</option>
+            <option value="Reporting">Reporting</option>
+            <option value="System">System</option>
+            <option value="Monitoring">Monitoring</option>
+            <option value="Automation">Automation</option>
+          </FormSelect>
+        </div>
 
-          {/* ── Schedule ── */}
-          <fieldset className="flex flex-col gap-3">
-            <legend className={SECTION}>Schedule</legend>
-            <div className="flex rounded-lg bg-surface-input border border-border-subtle p-0.5 w-fit">
-              {(["every", "cron"] as const).map((kind) => (
-                <button
-                  key={kind}
-                  type="button"
-                  onClick={() => setScheduleKind(kind)}
-                  className={`text-xs px-3 py-1.5 rounded-md transition-all ${
-                    scheduleKind === kind
-                      ? "bg-accent text-white shadow-sm"
-                      : "text-text-tertiary hover:text-text-primary"
-                  }`}
-                >
-                  {kind === "every" ? "Interval" : "Cron Expression"}
-                </button>
-              ))}
-            </div>
-            {scheduleKind === "every" ? (
-              <div className="flex gap-3 items-end">
-                <label className="flex flex-col gap-1 w-24">
-                  <span className={LABEL}>Every</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={everyValue}
-                    onChange={(e) => setEveryValue(e.target.value)}
-                    className={INPUT}
-                  />
-                </label>
-                <label className="flex flex-col gap-1 flex-1">
-                  <span className={LABEL}>Unit</span>
-                  <select
-                    value={everyUnit}
-                    onChange={(e) => setEveryUnit(e.target.value)}
-                    className={INPUT}
-                  >
-                    <option value="minutes">Minutes</option>
-                    <option value="hours">Hours</option>
-                    <option value="days">Days</option>
-                  </select>
-                </label>
-              </div>
-            ) : (
-              <label className="flex flex-col gap-1">
-                <span className={LABEL}>Expression</span>
-                <input
-                  type="text"
-                  value={cronExpr}
-                  onChange={(e) => setCronExpr(e.target.value)}
-                  placeholder="0 9 * * *"
-                  className={`${INPUT} font-mono`}
-                />
-                <span className="text-[10px] text-text-quaternary mt-0.5">
-                  min hour day month weekday
-                </span>
-              </label>
-            )}
-          </fieldset>
-
-          {/* ── Execution ── */}
-          <fieldset className="flex flex-col gap-3">
-            <legend className={SECTION}>Execution</legend>
-            <div className="grid grid-cols-3 gap-3">
-              <label className="flex flex-col gap-1">
-                <span className={LABEL}>Agent</span>
-                <select
-                  value={agentId}
-                  onChange={(e) => setAgentId(e.target.value)}
-                  className={INPUT}
-                >
-                  {(opts?.agents ?? ["default"]).map((a) => (
-                    <option key={a} value={a}>
-                      {a}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className={LABEL}>Session</span>
-                <select
-                  value={session}
-                  onChange={(e) => setSession(e.target.value)}
-                  className={INPUT}
-                >
-                  <option value="isolated">Isolated</option>
-                  <option value="last">Last</option>
-                  <option value="new">New</option>
-                  {(opts?.sessions ?? []).map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className={LABEL}>Wake mode</span>
-                <select
-                  value={wakeMode}
-                  onChange={(e) => setWakeMode(e.target.value)}
-                  className={INPUT}
-                >
-                  <option value="now">Now</option>
-                  <option value="next">Next</option>
-                </select>
-              </label>
-            </div>
-            {opts?.models && opts.models.length > 0 && (
-              <label className="flex flex-col gap-1">
-                <span className={LABEL}>Model override</span>
-                <select
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  className={INPUT}
-                >
-                  <option value="">Agent default</option>
-                  {opts.models.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} ({m.provider})
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-          </fieldset>
-
-          {/* ── Payload ── */}
-          <fieldset className="flex flex-col gap-3">
-            <legend className={SECTION}>Payload</legend>
-            <label className="flex flex-col gap-1">
-              <span className={LABEL}>Type</span>
-              <select
-                value={payloadKind}
-                onChange={(e) => setPayloadKind(e.target.value)}
-                className={INPUT}
-              >
-                <option value="agentTurn">Agent turn</option>
-                <option value="wake">Wake only</option>
-              </select>
-            </label>
-            {payloadKind === "agentTurn" && (
-              <label className="flex flex-col gap-1">
-                <span className={LABEL}>Agent message</span>
-                <textarea
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Write a daily summary of recent activity"
-                  rows={3}
-                  className={`${INPUT} resize-none`}
-                />
-              </label>
-            )}
-          </fieldset>
-
-          {/* ── Delivery (collapsible) ── */}
-          <div>
-            <button
-              type="button"
-              onClick={() => setShowDelivery(!showDelivery)}
-              className={`flex items-center gap-1.5 ${SECTION} hover:text-text-secondary transition-colors`}
-            >
-              <ChevronRight
-                size={12}
-                className={`transition-transform ${showDelivery ? "rotate-90" : ""}`}
-              />
-              Delivery Options
-            </button>
-            {showDelivery && (
-              <div className="mt-3 flex flex-col gap-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="flex flex-col gap-1">
-                    <span className={LABEL}>Mode</span>
-                    <select
-                      value={delivery}
-                      onChange={(e) => setDelivery(e.target.value)}
-                      className={INPUT}
-                    >
-                      <option value="announce-summary">Announce summary</option>
-                      <option value="direct">Direct</option>
-                    </select>
-                  </label>
-                  <label className="flex flex-col gap-1">
-                    <span className={LABEL}>Timeout (seconds)</span>
-                    <input
-                      type="number"
-                      min={0}
-                      value={timeoutSec}
-                      onChange={(e) => setTimeoutSec(e.target.value)}
-                      placeholder="300"
-                      className={INPUT}
-                    />
-                  </label>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="flex flex-col gap-1">
-                    <span className={LABEL}>Channel</span>
-                    <select
-                      value={channel}
-                      onChange={(e) => setChannel(e.target.value)}
-                      className={INPUT}
-                    >
-                      <option value="last">Last</option>
-                      {(opts?.channels ?? [])
-                        .filter((c) => c !== "last")
-                        .map((c) => (
-                          <option key={c} value={c}>
-                            {c}
-                          </option>
-                        ))}
-                    </select>
-                  </label>
-                  <label className="flex flex-col gap-1">
-                    <span className={LABEL}>To</span>
-                    <input
-                      type="text"
-                      value={to}
-                      onChange={(e) => setTo(e.target.value)}
-                      placeholder="+1555... or chat id"
-                      className={INPUT}
-                    />
-                  </label>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* ── Footer ── */}
-          <div className="flex items-center justify-between pt-3 border-t border-separator">
-            <button
-              type="button"
-              onClick={() => setEnabled(!enabled)}
-              className="flex items-center gap-2 text-text-secondary hover:text-text-primary transition-colors"
-            >
-              {enabled ? (
-                <ToggleRight size={22} className="text-success" />
-              ) : (
-                <ToggleLeft size={22} />
-              )}
-              <span className="text-xs">
-                {enabled ? "Enabled" : "Disabled"}
-              </span>
-            </button>
-            <div className="flex gap-2">
+        {/* Schedule */}
+        <fieldset className="flex flex-col gap-3">
+          <FormLabel accent>Schedule</FormLabel>
+          <div className="flex gap-2">
+            {(["every", "cron"] as const).map((kind) => (
               <button
+                key={kind}
                 type="button"
-                onClick={onClose}
-                className="text-sm text-text-secondary px-4 py-2 rounded-lg hover:bg-surface-control transition-colors"
+                onClick={() => setScheduleKind(kind)}
+                className={`text-xs px-4 py-1.5 rounded-md border transition-all ${
+                  scheduleKind === kind
+                    ? "border-accent bg-accent-bg text-accent"
+                    : "border-border text-text-muted hover:text-text"
+                }`}
               >
-                Cancel
+                {kind === "every" ? "Interval" : "Cron Expression"}
               </button>
-              <button
-                type="submit"
-                disabled={saving || !isValid}
-                className="text-sm text-white bg-accent px-4 py-2 rounded-lg hover:brightness-110 transition-all disabled:opacity-50"
-              >
-                {saving ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  "Create Job"
-                )}
-              </button>
+            ))}
+          </div>
+          {scheduleKind === "every" ? (
+            <div className="grid grid-cols-[100px_1fr] gap-3">
+              <div>
+                <FormLabel>Every</FormLabel>
+                <FormInput type="number" min={1} value={everyValue} onChange={(e) => setEveryValue(e.currentTarget.value)} />
+              </div>
+              <div>
+                <FormLabel>Unit</FormLabel>
+                <FormSelect value={everyUnit} onChange={(e) => setEveryUnit(e.currentTarget.value)}>
+                  <option value="minutes">Minutes</option>
+                  <option value="hours">Hours</option>
+                  <option value="days">Days</option>
+                </FormSelect>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <FormLabel>Expression</FormLabel>
+              <FormInput value={cronExpr} onChange={(e) => setCronExpr(e.currentTarget.value)} placeholder="0 9 * * *" />
+              <span className="text-[10px] text-text-faint mt-1">min hour day month weekday</span>
+            </div>
+          )}
+        </fieldset>
+
+        {/* Execution */}
+        <fieldset className="flex flex-col gap-3">
+          <FormLabel accent>Execution</FormLabel>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <FormLabel>Agent</FormLabel>
+              <FormSelect value={agentId} onChange={(e) => setAgentId(e.currentTarget.value)}>
+                {(opts?.agents ?? ["default"]).map((a) => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </FormSelect>
+            </div>
+            <div>
+              <FormLabel>Session</FormLabel>
+              <FormSelect value={session} onChange={(e) => setSession(e.currentTarget.value)}>
+                <option value="isolated">Isolated</option>
+                <option value="last">Last</option>
+                <option value="new">New</option>
+              </FormSelect>
+            </div>
+            <div>
+              <FormLabel>Wake mode</FormLabel>
+              <FormSelect value={wakeMode} onChange={(e) => setWakeMode(e.currentTarget.value)}>
+                <option value="now">Now</option>
+                <option value="next">Next</option>
+              </FormSelect>
             </div>
           </div>
-        </form>
+          {opts?.models && opts.models.length > 0 && (
+            <div>
+              <FormLabel>Model override</FormLabel>
+              <FormSelect value={model} onChange={(e) => setModel(e.currentTarget.value)}>
+                <option value="">Agent default</option>
+                {opts.models.map((m) => (
+                  <option key={m.id} value={m.id}>{m.name} ({m.provider})</option>
+                ))}
+              </FormSelect>
+            </div>
+          )}
+        </fieldset>
+
+        {/* Payload */}
+        <fieldset className="flex flex-col gap-3">
+          <FormLabel accent>Payload</FormLabel>
+          <div>
+            <FormLabel>Type</FormLabel>
+            <FormSelect value={payloadKind} onChange={(e) => setPayloadKind(e.currentTarget.value)}>
+              <option value="agentTurn">Agent turn</option>
+              <option value="wake">Wake only</option>
+            </FormSelect>
+          </div>
+          {payloadKind === "agentTurn" && (
+            <div>
+              <FormLabel>Agent message</FormLabel>
+              <FormTextarea value={message} onChange={(e) => setMessage(e.currentTarget.value)} placeholder="Write a daily summary of recent activity" rows={3} />
+            </div>
+          )}
+        </fieldset>
+
+        {/* Enabled toggle */}
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => setEnabled(!enabled)} className="text-text-muted hover:text-text transition-colors">
+            {enabled ? <ToggleRight size={22} className="text-success" /> : <ToggleLeft size={22} />}
+          </button>
+          <span className="text-xs text-text">{enabled ? "Enabled" : "Disabled"}</span>
+        </div>
       </div>
-    </div>
+      <ModalActions
+        onCancel={onClose}
+        onSubmit={handleSubmit}
+        submitLabel={saving ? "Creating..." : "Create Job"}
+        disabled={saving || !isValid}
+      />
+    </Modal>
   );
 }

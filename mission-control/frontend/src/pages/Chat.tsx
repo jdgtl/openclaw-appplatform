@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from "react";
 import { PageShell } from "../components/PageShell.js";
-import { GlassCard } from "../components/GlassCard.js";
 import { usePolling, useWsChat, useGatewayStatus } from "../lib/hooks.js";
 import { fetchJSON } from "../lib/api.js";
 import {
@@ -8,9 +7,9 @@ import {
   Send,
   Loader2,
   MessageSquare,
-  ChevronRight,
   Plus,
   WifiOff,
+  Pencil,
 } from "lucide-react";
 
 interface Session {
@@ -29,11 +28,16 @@ interface HistoryMessage {
   content: string;
 }
 
+const CHANNEL_ICONS: Record<string, string> = {
+  slack: "\u{1F4AC}",
+  whatsapp: "\u{1F4F1}",
+  mc: "\u{1F5A5}\uFE0F",
+  "mission control": "\u{1F5A5}\uFE0F",
+  discord: "\u{1F3AE}",
+};
+
 export function Chat() {
-  const { data: sessionsData } = usePolling<SessionsResponse>(
-    "/sessions",
-    30_000,
-  );
+  const { data: sessionsData } = usePolling<SessionsResponse>("/sessions", 30_000);
   const sessions = sessionsData?.sessions ?? [];
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -42,7 +46,12 @@ export function Chat() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [sendInput, setSendInput] = useState("");
 
-  // Active chat mode (new conversation or send to existing via WS)
+  // Inline title editing
+  const [editingTitle, setEditingTitle] = useState<string | null>(null);
+  const [editTitleValue, setEditTitleValue] = useState("");
+  const [hoverSession, setHoverSession] = useState<string | null>(null);
+  const [sessionNames, setSessionNames] = useState<Record<string, string>>({});
+
   const [activeSessionKey, setActiveSessionKey] = useState<string | null>(null);
   const { messages: wsMessages, streaming, send: wsSend, reset: wsReset } =
     useWsChat(activeSessionKey ?? undefined);
@@ -94,76 +103,123 @@ export function Chat() {
     wsSend(text);
   };
 
-  // Combine history with live WS messages
+  const getSessionName = (s: Session) =>
+    sessionNames[s.key] ?? s.displayName ?? s.key;
+
   const allMessages = [...history, ...wsMessages];
   const isActive = activeSessionKey !== null;
 
   return (
     <PageShell title="Chat">
-      <div className="flex gap-4 h-[calc(100vh-8rem)] min-h-0">
+      <div className="flex gap-0 h-[calc(100vh-8rem)] min-h-0 border border-border rounded-xl overflow-hidden">
         {/* Session list */}
-        <GlassCard className="w-72 shrink-0 flex flex-col !p-0 overflow-hidden">
-          <div className="p-3 border-b border-separator">
-            <div className="flex items-center gap-2 bg-surface-input rounded-lg px-2.5 py-1.5">
-              <Search size={14} className="text-text-quaternary" />
+        <div className="w-[280px] shrink-0 bg-sidebar-bg border-r border-border flex flex-col">
+          <div className="p-4">
+            <div className="flex items-center gap-2 bg-input-bg rounded-lg px-2.5 py-1.5 border border-input-border">
+              <Search size={14} className="text-text-faint" />
               <input
                 type="text"
                 placeholder="Search sessions..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-quaternary outline-none"
+                className="flex-1 bg-transparent text-sm text-text placeholder:text-text-faint outline-none"
               />
             </div>
           </div>
           <button
             onClick={startNewChat}
-            className={`mx-3 mt-3 mb-1 text-sm px-3 py-2 rounded-lg flex items-center gap-2 transition-colors ${
+            className={`mx-4 mb-3 px-4 py-2.5 rounded-lg text-[13px] font-medium flex items-center gap-2 border transition-colors ${
               activeSessionKey === "mc:chat" && !selectedKey
-                ? "bg-accent/15 text-accent"
-                : "text-text-secondary hover:bg-surface-control"
+                ? "bg-accent-bg border-accent-border text-accent"
+                : "border-border text-text-muted hover:bg-surface-hover"
             }`}
           >
             <Plus size={14} />
             New Conversation
           </button>
-          <div className="flex-1 overflow-y-auto p-2">
-            {filteredSessions.map((s) => (
-              <button
-                key={s.key}
-                onClick={() => loadSession(s.key)}
-                className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between transition-colors ${
-                  selectedKey === s.key
-                    ? "bg-accent/15 text-accent"
-                    : "text-text-secondary hover:bg-surface-control"
-                }`}
-              >
-                <div className="truncate">
-                  <p className="font-medium truncate">
-                    {s.displayName || s.key}
-                  </p>
-                  {s.channel && (
-                    <p className="text-xs text-text-quaternary">{s.channel}</p>
-                  )}
+          <div className="flex-1 overflow-y-auto">
+            {filteredSessions.map((s) => {
+              const channelIcon = CHANNEL_ICONS[s.channel?.toLowerCase() ?? ""] ?? "\u{1F4AC}";
+              const isSelected = selectedKey === s.key;
+              const isEditing = editingTitle === s.key;
+
+              return (
+                <div
+                  key={s.key}
+                  onClick={() => { loadSession(s.key); if (!isEditing) setEditingTitle(null); }}
+                  onMouseEnter={() => setHoverSession(s.key)}
+                  onMouseLeave={() => setHoverSession(null)}
+                  className={`px-4 py-3 cursor-pointer transition-colors ${
+                    isSelected
+                      ? "bg-accent-bg border-l-2 border-l-accent"
+                      : "border-l-2 border-l-transparent hover:bg-surface-hover"
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 mb-1">
+                    {isEditing ? (
+                      <input
+                        autoFocus
+                        value={editTitleValue}
+                        onChange={(e) => setEditTitleValue(e.target.value)}
+                        onBlur={() => {
+                          setSessionNames((prev) => ({ ...prev, [s.key]: editTitleValue }));
+                          setEditingTitle(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            setSessionNames((prev) => ({ ...prev, [s.key]: editTitleValue }));
+                            setEditingTitle(null);
+                          }
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-[13px] text-text font-medium bg-input-bg border border-accent-border rounded px-1.5 py-0.5 outline-none w-full font-mono"
+                      />
+                    ) : (
+                      <span className={`text-[13px] font-medium flex-1 truncate ${isSelected ? "text-text" : "text-text-muted"}`}>
+                        {getSessionName(s)}
+                      </span>
+                    )}
+                    {hoverSession === s.key && !isEditing && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditTitleValue(getSessionName(s));
+                          setEditingTitle(s.key);
+                        }}
+                        className="text-accent shrink-0 p-0.5"
+                        style={{ animation: "fadeIn 0.15s ease" }}
+                      >
+                        <Pencil size={11} />
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs">{channelIcon}</span>
+                      <span className="text-[11px] text-text-dim">{s.channel ?? "mc"}</span>
+                    </div>
+                  </div>
                 </div>
-                <ChevronRight size={14} className="shrink-0 opacity-40" />
-              </button>
-            ))}
+              );
+            })}
             {filteredSessions.length === 0 && (
-              <p className="text-xs text-text-quaternary text-center mt-4">
+              <p className="text-xs text-text-faint text-center mt-4">
                 No sessions found
               </p>
             )}
           </div>
-        </GlassCard>
+        </div>
 
         {/* Message area */}
-        <GlassCard className="flex-1 flex flex-col !p-0 overflow-hidden">
+        <div className="flex-1 flex flex-col bg-bg">
           {/* Header */}
           {isActive && (
-            <div className="px-4 py-2.5 border-b border-separator flex items-center gap-2">
-              <MessageSquare size={14} className="text-text-tertiary" />
-              <span className="text-sm text-text-secondary">
-                {selectedKey || "New Conversation"}
+            <div className="px-5 py-3 border-b border-border flex items-center gap-2">
+              <MessageSquare size={14} className="text-text-dim" />
+              <span className="text-sm text-text font-medium">
+                {selectedKey
+                  ? getSessionName(sessions.find((s) => s.key === selectedKey) ?? { key: selectedKey })
+                  : "New Conversation"}
               </span>
               {!gatewayConnected && (
                 <span className="ml-auto flex items-center gap-1.5 text-xs text-warning">
@@ -175,32 +231,28 @@ export function Chat() {
           )}
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+          <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
             {historyLoading ? (
-              <div className="flex items-center justify-center h-full text-text-tertiary">
+              <div className="flex items-center justify-center h-full text-text-dim">
                 <Loader2 size={20} className="animate-spin" />
               </div>
             ) : isActive ? (
               allMessages.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-text-quaternary text-sm">
+                <div className="flex items-center justify-center h-full text-text-faint text-sm">
                   Send a message to start chatting
                 </div>
               ) : (
                 allMessages.map((msg, i) => (
-                  <MessageBubble
-                    key={i}
-                    role={msg.role}
-                    content={msg.content}
-                  />
+                  <MessageBubble key={i} role={msg.role} content={msg.content} />
                 ))
               )
             ) : (
-              <div className="flex items-center justify-center h-full text-text-quaternary text-sm">
+              <div className="flex items-center justify-center h-full text-text-faint text-sm">
                 Select a session or start a new conversation
               </div>
             )}
             {streaming && (
-              <div className="self-start text-text-tertiary">
+              <div className="self-start text-text-dim">
                 <Loader2 size={14} className="animate-spin" />
               </div>
             )}
@@ -209,8 +261,8 @@ export function Chat() {
 
           {/* Input */}
           {isActive && (
-            <div className="px-4 py-3 border-t border-separator">
-              <div className="flex items-center gap-2 bg-surface-input rounded-lg px-3 py-2">
+            <div className="px-5 py-3 border-t border-border">
+              <div className="flex items-center gap-2 bg-input-bg rounded-lg px-3 py-2 border border-input-border focus-within:border-accent transition-colors">
                 <input
                   type="text"
                   placeholder="Send a message..."
@@ -219,7 +271,7 @@ export function Chat() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) handleSend();
                   }}
-                  className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-quaternary outline-none"
+                  className="flex-1 bg-transparent text-sm text-text placeholder:text-text-faint outline-none"
                 />
                 <button
                   onClick={handleSend}
@@ -231,29 +283,31 @@ export function Chat() {
               </div>
             </div>
           )}
-        </GlassCard>
+        </div>
       </div>
     </PageShell>
   );
 }
 
-function MessageBubble({
-  role,
-  content,
-}: {
-  role: string;
-  content: string;
-}) {
+function MessageBubble({ role, content }: { role: string; content: string }) {
   const isUser = role === "user";
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+
   return (
-    <div
-      className={`text-sm leading-relaxed whitespace-pre-wrap max-w-[80%] ${
-        isUser
-          ? "self-end bg-accent/15 text-text-primary rounded-2xl rounded-br-md px-3 py-2"
-          : "self-start text-text-secondary"
-      }`}
-    >
-      {content}
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+      <div
+        className={`max-w-[70%] px-4 py-3 rounded-xl ${
+          isUser
+            ? "bg-accent-bg border border-accent-border"
+            : "bg-card-bg border border-border"
+        }`}
+      >
+        <p className="text-[13px] text-text leading-relaxed whitespace-pre-wrap">
+          {content}
+        </p>
+        <span className="text-[10px] text-text-faint mt-1.5 block">{timeStr}</span>
+      </div>
     </div>
   );
 }

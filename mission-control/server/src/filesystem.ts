@@ -1,6 +1,7 @@
 import { readFile, writeFile, readdir, stat, rename, mkdir, rm } from "node:fs/promises";
 import { join, basename } from "node:path";
 import { randomBytes } from "node:crypto";
+import { modelCost } from "./lib/pricing.js";
 
 const stateDir = process.env.OPENCLAW_STATE_DIR || "/data/.openclaw";
 
@@ -217,6 +218,8 @@ interface UsageSummary {
   totalOutput: number;
   totalTokens: number;
   messageCount: number;
+  costByModel: Record<string, number>;
+  totalCost: number;
 }
 
 export async function aggregateUsage(days: number = 7): Promise<UsageSummary> {
@@ -231,6 +234,8 @@ export async function aggregateUsage(days: number = 7): Promise<UsageSummary> {
     totalOutput: 0,
     totalTokens: 0,
     messageCount: 0,
+    costByModel: {},
+    totalCost: 0,
   };
 
   try {
@@ -294,6 +299,10 @@ export async function aggregateUsage(days: number = 7): Promise<UsageSummary> {
             result.byDay[day].input += input;
             result.byDay[day].output += output;
             result.byDay[day].messages++;
+
+            const cost = modelCost(model, input, output);
+            result.totalCost += cost;
+            result.costByModel[model] = (result.costByModel[model] ?? 0) + cost;
           } catch { /* skip bad lines */ }
         }
       } catch { /* skip unreadable files */ }

@@ -8,11 +8,11 @@ import {
   Puzzle,
   BarChart3,
   KanbanSquare,
-  PanelLeftClose,
-  PanelLeft,
+  ChevronLeft,
 } from "lucide-react";
 import { useState } from "react";
 import { ThemeToggle } from "./ThemeToggle.js";
+import { StatusDot } from "./StatusDot.js";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -30,23 +30,31 @@ export function Sidebar() {
 
   return (
     <aside
-      className={`glass-sidebar flex flex-col h-full shrink-0 transition-[width] duration-200 ${
-        collapsed ? "w-16" : "w-52"
+      className={`bg-sidebar-bg border-r border-border flex flex-col h-full shrink-0 transition-[width] duration-250 ease-[cubic-bezier(0.4,0,0.2,1)] ${
+        collapsed ? "w-16" : "w-[200px]"
       }`}
     >
       {/* Header */}
-      <div className="flex items-center gap-2.5 px-4 h-14 border-b border-separator">
-        {!collapsed && (
-          <span className="font-semibold text-sm text-text-primary whitespace-nowrap">
-            Mission Control
-          </span>
+      <div className="px-4 py-4 border-b border-border">
+        {!collapsed ? (
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-text-dim">
+              SAUCE CREATIVE
+            </span>
+            <span className="text-[15px] font-bold text-text">
+              Mission Control
+            </span>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <StatusDot status="active" size={6} />
+              <span className="text-[11px] text-accent">Clawdius</span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-[11px] font-bold text-text">MC</span>
+            <StatusDot status="active" size={6} />
+          </div>
         )}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="ml-auto text-text-tertiary hover:text-text-primary transition-colors"
-        >
-          {collapsed ? <PanelLeft size={18} /> : <PanelLeftClose size={18} />}
-        </button>
       </div>
 
       {/* Nav */}
@@ -59,8 +67,8 @@ export function Sidebar() {
             className={({ isActive }) =>
               `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
                 isActive
-                  ? "bg-accent/15 text-accent"
-                  : "text-text-secondary hover:text-text-primary hover:bg-surface-control"
+                  ? "bg-accent-bg text-accent"
+                  : "text-text-muted hover:text-text hover:bg-surface-hover"
               }`
             }
           >
@@ -71,8 +79,20 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="p-3 border-t border-separator flex justify-center">
-        <ThemeToggle />
+      <div className="p-3 border-t border-border flex flex-col gap-2">
+        <div className="flex justify-center">
+          <ThemeToggle collapsed={collapsed} />
+        </div>
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="flex items-center justify-center gap-1.5 text-text-dim hover:text-text transition-colors py-1"
+        >
+          <ChevronLeft
+            size={14}
+            className={`transition-transform duration-250 ${collapsed ? "rotate-180" : ""}`}
+          />
+          {!collapsed && <span className="text-xs">Collapse</span>}
+        </button>
       </div>
     </aside>
   );

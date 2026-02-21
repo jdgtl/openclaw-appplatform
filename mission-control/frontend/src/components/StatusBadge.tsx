@@ -1,11 +1,4 @@
-const statusColors: Record<string, string> = {
-  active: "bg-success",
-  idle: "bg-warning",
-  error: "bg-danger",
-  disabled: "bg-text-quaternary",
-  online: "bg-success",
-  offline: "bg-danger",
-};
+import { StatusDot } from "./StatusDot.js";
 
 export function StatusBadge({
   status,
@@ -14,16 +7,12 @@ export function StatusBadge({
   status: string;
   label?: string;
 }) {
-  const colorClass = statusColors[status] ?? "bg-text-quaternary";
   const displayLabel = label ?? status;
 
   return (
     <span className="inline-flex items-center gap-1.5 text-sm">
-      <span
-        className={`h-2 w-2 rounded-full ${colorClass}`}
-        aria-hidden="true"
-      />
-      <span className="text-text-secondary capitalize">{displayLabel}</span>
+      <StatusDot status={status} />
+      <span className="text-text-muted capitalize">{displayLabel}</span>
     </span>
   );
 }

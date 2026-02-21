@@ -20,7 +20,7 @@ export function TextEditor({
       readOnly={readonly}
       rows={rows}
       spellCheck={language === "markdown"}
-      className={`w-full bg-surface-input text-sm text-text-primary rounded-lg px-4 py-3 outline-none border border-border-subtle focus:border-accent transition-colors resize-y font-mono leading-relaxed ${
+      className={`w-full bg-code-bg text-sm text-text rounded-lg px-4 py-3 outline-none border border-input-border focus:border-accent transition-colors resize-y font-mono leading-relaxed ${
         readonly ? "opacity-70 cursor-default" : ""
       }`}
     />

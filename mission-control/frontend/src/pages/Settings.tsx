@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import { PageShell } from "../components/PageShell.js";
-import { GlassCard } from "../components/GlassCard.js";
 import { TextEditor } from "../components/TextEditor.js";
 import { usePolling } from "../lib/hooks.js";
 import { fetchJSON, putJSON, postJSON } from "../lib/api.js";
@@ -13,6 +12,8 @@ import {
   Server,
   Loader2,
   AlertTriangle,
+  ToggleLeft,
+  ToggleRight,
 } from "lucide-react";
 
 interface SystemInfo {
@@ -39,7 +40,6 @@ export function Settings() {
   const [heartbeatSaving, setHeartbeatSaving] = useState(false);
   const [heartbeatRunning, setHeartbeatRunning] = useState(false);
 
-  // Load config
   const loadConfig = useCallback(async () => {
     try {
       const config = await fetchJSON<Record<string, unknown>>("/config");
@@ -48,7 +48,6 @@ export function Settings() {
       setDirty(false);
       setError(null);
 
-      // Extract heartbeat settings
       const hb = config.heartbeat as Record<string, unknown> | undefined;
       if (hb) {
         setHeartbeatEnabled(hb.enabled !== false);
@@ -140,23 +139,21 @@ export function Settings() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Config Editor — takes 2 cols */}
-        <GlassCard delay={0} className="lg:col-span-2">
+        <div className="lg:col-span-2 bg-card-bg border border-border rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <div className="h-9 w-9 rounded-lg bg-accent/15 flex items-center justify-center">
                 <SettingsIcon size={18} className="text-accent" />
               </div>
               <div>
-                <h3 className="text-sm font-medium text-text-primary">
-                  Configuration
-                </h3>
-                <p className="text-xs text-text-tertiary">openclaw.json</p>
+                <h3 className="text-sm font-medium text-text">Configuration</h3>
+                <p className="text-xs text-text-dim">openclaw.json</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={loadConfig}
-                className="flex items-center gap-1.5 text-xs text-text-secondary hover:text-text-primary px-3 py-1.5 rounded-lg hover:bg-surface-control transition-colors"
+                className="flex items-center gap-1.5 text-xs text-text-muted hover:text-text px-3 py-1.5 rounded-lg hover:bg-surface-hover transition-colors"
               >
                 <RefreshCw size={12} />
                 Reload
@@ -192,40 +189,38 @@ export function Settings() {
           {dirty && (
             <p className="text-xs text-warning mt-2">Unsaved changes</p>
           )}
-        </GlassCard>
+        </div>
 
         {/* Right column */}
         <div className="flex flex-col gap-4">
           {/* Heartbeat */}
-          <GlassCard delay={0.05}>
+          <div className="bg-card-bg border border-border rounded-xl p-5">
             <div className="flex items-center gap-3 mb-4">
               <div className="h-9 w-9 rounded-lg bg-danger/15 flex items-center justify-center">
                 <Heart size={18} className="text-danger" />
               </div>
-              <h3 className="text-sm font-medium text-text-primary">
-                Heartbeat
-              </h3>
+              <h3 className="text-sm font-medium text-text">Heartbeat</h3>
             </div>
             <div className="flex flex-col gap-3">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={heartbeatEnabled}
-                  onChange={(e) => setHeartbeatEnabled(e.target.checked)}
-                  className="accent-accent"
-                />
-                <span className="text-sm text-text-secondary">Enabled</span>
-              </label>
+              <button
+                onClick={() => setHeartbeatEnabled(!heartbeatEnabled)}
+                className="flex items-center gap-2 text-text-muted hover:text-text transition-colors"
+              >
+                {heartbeatEnabled ? (
+                  <ToggleRight size={22} className="text-success" />
+                ) : (
+                  <ToggleLeft size={22} />
+                )}
+                <span className="text-sm">{heartbeatEnabled ? "Enabled" : "Disabled"}</span>
+              </button>
               <label className="flex flex-col gap-1">
-                <span className="text-xs text-text-tertiary">
-                  Interval (minutes)
-                </span>
+                <span className="text-xs text-text-dim">Interval (minutes)</span>
                 <input
                   type="number"
                   min={1}
                   value={heartbeatInterval}
                   onChange={(e) => setHeartbeatInterval(e.target.value)}
-                  className="bg-surface-input text-sm text-text-primary rounded-lg px-3 py-2 outline-none border border-border-subtle focus:border-accent transition-colors w-full"
+                  className="bg-input-bg text-sm text-text rounded-lg px-3 py-2 outline-none border border-input-border focus:border-accent transition-colors w-full"
                 />
               </label>
               <div className="flex gap-2">
@@ -244,7 +239,7 @@ export function Settings() {
                 <button
                   onClick={handleRunHeartbeat}
                   disabled={heartbeatRunning}
-                  className="flex items-center gap-1.5 text-xs text-accent hover:text-accent/80 px-3 py-1.5 rounded-lg hover:bg-surface-control transition-colors disabled:opacity-50"
+                  className="flex items-center gap-1.5 text-xs text-accent hover:text-accent/80 px-3 py-1.5 rounded-lg hover:bg-surface-hover transition-colors disabled:opacity-50"
                 >
                   {heartbeatRunning ? (
                     <Loader2 size={12} className="animate-spin" />
@@ -255,60 +250,58 @@ export function Settings() {
                 </button>
               </div>
             </div>
-          </GlassCard>
+          </div>
 
           {/* System Info */}
-          <GlassCard delay={0.1}>
+          <div className="bg-card-bg border border-border rounded-xl p-5">
             <div className="flex items-center gap-3 mb-4">
               <div className="h-9 w-9 rounded-lg bg-success/15 flex items-center justify-center">
                 <Server size={18} className="text-success" />
               </div>
-              <h3 className="text-sm font-medium text-text-primary">
-                System Info
-              </h3>
+              <h3 className="text-sm font-medium text-text">System Info</h3>
             </div>
             {sysInfo ? (
               <div className="flex flex-col gap-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-text-tertiary">Node</span>
-                  <span className="text-text-secondary font-mono text-xs">
+                  <span className="text-text-dim">Node</span>
+                  <span className="text-text-muted font-mono text-xs">
                     {sysInfo.nodeVersion}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-text-tertiary">MC Version</span>
-                  <span className="text-text-secondary">{sysInfo.mcVersion}</span>
+                  <span className="text-text-dim">MC Version</span>
+                  <span className="text-text-muted">{sysInfo.mcVersion}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-text-tertiary">Uptime</span>
-                  <span className="text-text-secondary">
+                  <span className="text-text-dim">Uptime</span>
+                  <span className="text-text-muted">
                     {formatUptime(sysInfo.uptime)}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-text-tertiary">Memory (RSS)</span>
-                  <span className="text-text-secondary">
+                  <span className="text-text-dim">Memory (RSS)</span>
+                  <span className="text-text-muted">
                     {formatBytes(sysInfo.memory.rss)}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-text-tertiary">Heap</span>
-                  <span className="text-text-secondary">
+                  <span className="text-text-dim">Heap</span>
+                  <span className="text-text-muted">
                     {formatBytes(sysInfo.memory.heapUsed)} /{" "}
                     {formatBytes(sysInfo.memory.heapTotal)}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-text-tertiary">PID</span>
-                  <span className="text-text-secondary font-mono text-xs">
+                  <span className="text-text-dim">PID</span>
+                  <span className="text-text-muted font-mono text-xs">
                     {sysInfo.pid}
                   </span>
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-text-quaternary">Loading...</p>
+              <p className="text-sm text-text-faint">Loading...</p>
             )}
-          </GlassCard>
+          </div>
         </div>
       </div>
     </PageShell>

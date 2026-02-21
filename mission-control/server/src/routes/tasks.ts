@@ -64,6 +64,41 @@ export function tasksRouter(): Router {
     }
   });
 
+  // Reorder tasks
+  router.put("/reorder", async (req, res) => {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || !ids.every((id: unknown) => typeof id === "string")) {
+      res.status(400).json({ error: "ids must be an array of strings" });
+      return;
+    }
+
+    try {
+      const data = await readTasks();
+      const taskMap = new Map(data.tasks.map((t) => [t.id, t]));
+
+      // Ordered tasks: those in the ids list, in the given order
+      const ordered: TaskItem[] = [];
+      for (const id of ids) {
+        const task = taskMap.get(id);
+        if (task) {
+          ordered.push(task);
+          taskMap.delete(id);
+        }
+      }
+
+      // Remaining tasks not in the ids list go at the end
+      const remaining = data.tasks.filter((t) => taskMap.has(t.id));
+      data.tasks = [...ordered, ...remaining];
+      data.version++;
+      await writeTasks(data);
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({
+        error: err instanceof Error ? err.message : "Failed to reorder tasks",
+      });
+    }
+  });
+
   // Update task
   router.put("/:id", async (req, res) => {
     const { title, description, status, priority, labels, expectedVersion } = req.body;

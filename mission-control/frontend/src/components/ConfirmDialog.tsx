@@ -34,26 +34,29 @@ export function ConfirmDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="glass-window w-full max-w-sm mx-4">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-separator">
-          <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-modal-overlay"
+      onClick={(e) => { if (e.target === e.currentTarget && !loading) onCancel(); }}
+    >
+      <div className="bg-modal-bg border border-border rounded-[14px] w-full max-w-sm mx-4" style={{ animation: "modalIn 0.25s ease" }}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <h2 className="text-sm font-semibold text-text">{title}</h2>
           <button
             onClick={onCancel}
             disabled={loading}
-            className="text-text-tertiary hover:text-text-primary disabled:opacity-50"
+            className="text-text-dim hover:text-text disabled:opacity-50"
           >
             <X size={16} />
           </button>
         </div>
         <div className="px-5 py-4">
-          <p className="text-sm text-text-secondary">{message}</p>
+          <p className="text-sm text-text-muted">{message}</p>
         </div>
-        <div className="flex justify-end gap-2 px-5 py-4 border-t border-separator">
+        <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
           <button
             onClick={onCancel}
             disabled={loading}
-            className="text-sm text-text-secondary px-4 py-2 rounded-lg hover:bg-surface-control transition-colors disabled:opacity-50"
+            className="text-sm text-text-muted px-4 py-2 rounded-lg hover:bg-surface-hover transition-colors disabled:opacity-50"
           >
             Cancel
           </button>

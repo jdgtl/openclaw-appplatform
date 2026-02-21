@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import { PageShell } from "../components/PageShell.js";
-import { GlassCard } from "../components/GlassCard.js";
 import { TextEditor } from "../components/TextEditor.js";
 import { fetchJSON, putJSON } from "../lib/api.js";
 import {
@@ -81,7 +80,7 @@ export function Memory() {
   if (loading) {
     return (
       <PageShell title="Memory & Workspace">
-        <div className="flex items-center justify-center h-64 text-text-tertiary">
+        <div className="flex items-center justify-center h-64 text-text-dim">
           <Loader2 size={24} className="animate-spin" />
         </div>
       </PageShell>
@@ -90,19 +89,19 @@ export function Memory() {
 
   return (
     <PageShell title="Memory & Workspace">
-      <div className="flex gap-4 h-[calc(100vh-120px)]">
+      <div className="flex gap-0 h-[calc(100vh-120px)] border border-border rounded-xl overflow-hidden">
         {/* File browser */}
-        <GlassCard delay={0} className="w-64 shrink-0 flex flex-col !p-0 overflow-hidden">
-          <div className="p-3 border-b border-separator">
+        <div className="w-64 shrink-0 bg-sidebar-bg border-r border-border flex flex-col">
+          <div className="p-3 border-b border-border">
             <div className="flex items-center gap-2">
               <Brain size={16} className="text-accent" />
-              <span className="text-sm font-medium text-text-primary">Files</span>
+              <span className="text-sm font-medium text-text">Files</span>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto p-2">
             {/* Workspace files */}
             <div className="mb-3">
-              <p className="text-[11px] font-semibold text-text-quaternary uppercase tracking-wider px-2 mb-1">
+              <p className="text-[11px] font-bold text-accent uppercase tracking-wider px-2 mb-1">
                 Workspace
               </p>
               {workspaceFiles.map((f) => (
@@ -111,8 +110,8 @@ export function Memory() {
                   onClick={() => handleSelectFile(f.name, "workspace")}
                   className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left text-sm transition-colors ${
                     selectedFile === f.name && selectedSection === "workspace"
-                      ? "bg-accent/15 text-accent"
-                      : "text-text-secondary hover:text-text-primary hover:bg-surface-control"
+                      ? "bg-accent-bg text-accent"
+                      : "text-text-muted hover:text-text hover:bg-surface-hover"
                   }`}
                 >
                   <FileText size={14} className="shrink-0" />
@@ -126,7 +125,7 @@ export function Memory() {
 
             {/* Memory files */}
             <div>
-              <p className="text-[11px] font-semibold text-text-quaternary uppercase tracking-wider px-2 mb-1">
+              <p className="text-[11px] font-bold text-text-dim uppercase tracking-wider px-2 mb-1">
                 Memory (read-only)
               </p>
               {memoryFiles.map((f) => (
@@ -135,8 +134,8 @@ export function Memory() {
                   onClick={() => handleSelectFile(f.name, "memory")}
                   className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left text-sm transition-colors ${
                     selectedFile === f.name && selectedSection === "memory"
-                      ? "bg-accent/15 text-accent"
-                      : "text-text-secondary hover:text-text-primary hover:bg-surface-control"
+                      ? "bg-accent-bg text-accent"
+                      : "text-text-muted hover:text-text hover:bg-surface-hover"
                   }`}
                 >
                   <BookOpen size={14} className="shrink-0" />
@@ -144,23 +143,23 @@ export function Memory() {
                 </button>
               ))}
               {memoryFiles.length === 0 && (
-                <p className="text-xs text-text-quaternary px-2">No memory files</p>
+                <p className="text-xs text-text-faint px-2">No memory files</p>
               )}
             </div>
           </div>
-        </GlassCard>
+        </div>
 
         {/* Editor */}
-        <GlassCard delay={0.05} className="flex-1 flex flex-col !p-0 overflow-hidden">
+        <div className="flex-1 flex flex-col bg-bg">
           {selectedFile ? (
             <>
-              <div className="flex items-center justify-between px-4 py-3 border-b border-separator shrink-0">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-text-primary">
+                  <span className="text-sm font-medium text-text">
                     {selectedFile}
                   </span>
                   {isReadonly && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-control text-text-quaternary">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-hover text-text-faint">
                       read-only
                     </span>
                   )}
@@ -194,11 +193,11 @@ export function Memory() {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-text-quaternary text-sm">
+            <div className="flex-1 flex items-center justify-center text-text-faint text-sm">
               Select a file to view or edit
             </div>
           )}
-        </GlassCard>
+        </div>
       </div>
     </PageShell>
   );
