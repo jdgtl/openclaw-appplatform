@@ -6,6 +6,7 @@ import {
   readIdentityName,
   readHeartbeat,
   readRecentActivity,
+  detectOpenClawVersion,
 } from "../filesystem.js";
 
 interface CachedStatus {
@@ -30,13 +31,14 @@ export function statusRouter(gateway: GatewayClient): Router {
 
     // Fetch all data concurrently, tolerate individual failures
     // Note: skip gateway.getStatus() — /health hangs (WebSocket-only gateway)
-    const [name, config, heartbeat, activity, sessionsResult] =
+    const [name, config, heartbeat, activity, sessionsResult, openclawVersion] =
       await Promise.allSettled([
         readIdentityName(),
         readConfig(),
         readHeartbeat(),
         readRecentActivity(3),
         gateway.invokeTool("sessions_list"),
+        detectOpenClawVersion(),
       ]);
 
     const configVal =
@@ -57,11 +59,14 @@ export function statusRouter(gateway: GatewayClient): Router {
       extractAgentName(configVal) ||
       null;
 
+    const version =
+      openclawVersion.status === "fulfilled" ? openclawVersion.value : null;
+
     const data = {
       agent: {
         name: agentName,
         status: gatewayAlive ? "active" : "error",
-        version: null,
+        version,
       },
       sessions: sessionsData,
       heartbeat:

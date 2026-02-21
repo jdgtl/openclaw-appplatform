@@ -1,7 +1,7 @@
 import { Router } from "express";
 import type { GatewayClient } from "../gateway.js";
 import { unwrapToolResult } from "../lib/unwrap.js";
-import { readConfig } from "../filesystem.js";
+import { readConfig, readCronCategories, writeCronCategories } from "../filesystem.js";
 
 // Normalize a gateway cron job into a flat shape for the frontend
 interface NormalizedJob {
@@ -21,6 +21,8 @@ interface NormalizedJob {
   timeout?: number;
   channel?: string;
   to?: string;
+  category?: string;
+  runCount?: number;
 }
 
 function normalizeJob(raw: Record<string, unknown>): NormalizedJob {
@@ -65,18 +67,28 @@ function normalizeJob(raw: Record<string, unknown>): NormalizedJob {
     timeout: deliveryObj?.timeout as number | undefined,
     channel: deliveryObj?.channel as string | undefined,
     to: deliveryObj?.to as string | undefined,
+    category: raw.category as string | undefined,
+    runCount: typeof state?.runCount === "number" ? state.runCount : undefined,
   };
 }
 
 export function cronRouter(gateway: GatewayClient): Router {
   const router = Router();
 
-  // List all cron jobs
+  // List all cron jobs (merges local categories)
   router.get("/", async (_req, res) => {
     try {
-      const raw = await gateway.invokeTool("cron", { action: "list" });
+      const [raw, categories] = await Promise.all([
+        gateway.invokeTool("cron", { action: "list" }),
+        readCronCategories(),
+      ]);
       const data = unwrapToolResult(raw) as { jobs?: Record<string, unknown>[] };
-      const jobs = (data?.jobs ?? []).map(normalizeJob);
+      const jobs = (data?.jobs ?? []).map((j) => {
+        const job = normalizeJob(j);
+        // Merge locally stored category
+        if (categories[job.id]) job.category = categories[job.id];
+        return job;
+      });
       res.json({ jobs });
     } catch (err) {
       res.status(502).json({
@@ -194,10 +206,43 @@ export function cronRouter(gateway: GatewayClient): Router {
         job: gatewayJob,
       });
       const data = unwrapToolResult(raw) as Record<string, unknown>;
-      res.json(normalizeJob(data));
+      const normalized = normalizeJob(data);
+
+      // Save category locally (not a gateway concept)
+      if (job.category && normalized.id) {
+        const categories = await readCronCategories();
+        categories[normalized.id] = job.category;
+        normalized.category = job.category;
+        await writeCronCategories(categories);
+      }
+
+      res.json(normalized);
     } catch (err) {
       res.status(502).json({
         error: err instanceof Error ? err.message : "Failed to create cron job",
+      });
+    }
+  });
+
+  // Update a job's category (local-only, not a gateway concept)
+  router.put("/:id/category", async (req, res) => {
+    const { category } = req.body;
+    if (typeof category !== "string") {
+      res.status(400).json({ error: "category string is required" });
+      return;
+    }
+    try {
+      const categories = await readCronCategories();
+      if (category) {
+        categories[req.params.id] = category;
+      } else {
+        delete categories[req.params.id];
+      }
+      await writeCronCategories(categories);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({
+        error: err instanceof Error ? err.message : "Failed to update category",
       });
     }
   });
@@ -246,6 +291,14 @@ export function cronRouter(gateway: GatewayClient): Router {
         action: "remove",
         jobId: req.params.id,
       });
+
+      // Clean up local category mapping
+      const categories = await readCronCategories();
+      if (categories[req.params.id]) {
+        delete categories[req.params.id];
+        await writeCronCategories(categories);
+      }
+
       res.json(unwrapToolResult(result));
     } catch (err) {
       res.status(502).json({

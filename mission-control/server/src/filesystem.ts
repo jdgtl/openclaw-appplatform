@@ -344,3 +344,57 @@ export async function readTasks(): Promise<TasksFile> {
 export async function writeTasks(data: TasksFile): Promise<void> {
   await writeFile(tasksPath, JSON.stringify(data, null, 2) + "\n", "utf-8");
 }
+
+// ── Cron categories (local-only, not stored in gateway) ──
+
+const cronCategoriesPath = join(workspaceDir, "cron-categories.json");
+
+export async function readCronCategories(): Promise<Record<string, string>> {
+  try {
+    const raw = await readFile(cronCategoriesPath, "utf-8");
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+export async function writeCronCategories(data: Record<string, string>): Promise<void> {
+  await writeFile(cronCategoriesPath, JSON.stringify(data, null, 2) + "\n", "utf-8");
+}
+
+// ── OpenClaw version detection ──
+
+let cachedOpenClawVersion: string | null = null;
+
+export async function detectOpenClawVersion(): Promise<string> {
+  if (cachedOpenClawVersion) return cachedOpenClawVersion;
+
+  // Try reading from pnpm global install
+  const candidates = [
+    join(stateDir, "version"),
+    "/home/openclaw/.openclaw/version",
+  ];
+
+  for (const p of candidates) {
+    try {
+      const v = (await readFile(p, "utf-8")).trim();
+      if (v) { cachedOpenClawVersion = v; return v; }
+    } catch { /* continue */ }
+  }
+
+  // Try execing the binary
+  try {
+    const { execSync } = await import("node:child_process");
+    const out = execSync("openclaw --version 2>/dev/null || openclaw version 2>/dev/null", {
+      timeout: 3000,
+      encoding: "utf-8",
+    }).trim();
+    // Extract version number from output (e.g. "openclaw 2026.2.14" -> "2026.2.14")
+    const match = out.match(/(\d{4}\.\d+\.\d+)/);
+    if (match) { cachedOpenClawVersion = match[1]; return match[1]; }
+    if (out) { cachedOpenClawVersion = out; return out; }
+  } catch { /* binary not available or timed out */ }
+
+  cachedOpenClawVersion = "unknown";
+  return "unknown";
+}
