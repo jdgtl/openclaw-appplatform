@@ -259,8 +259,8 @@ export async function aggregateUsage(days: number = 7): Promise<UsageSummary> {
             const usage = msg.usage ?? entry.usage;
             if (!usage) continue;
 
-            const input = usage.input_tokens ?? usage.inputTokens ?? 0;
-            const output = usage.output_tokens ?? usage.outputTokens ?? 0;
+            const input = usage.input_tokens ?? usage.inputTokens ?? usage.input ?? 0;
+            const output = usage.output_tokens ?? usage.outputTokens ?? usage.output ?? 0;
             const model = msg.model ?? entry.model ?? "unknown";
 
             // Extract date from timestamp or file name
@@ -300,7 +300,9 @@ export async function aggregateUsage(days: number = 7): Promise<UsageSummary> {
             result.byDay[day].output += output;
             result.byDay[day].messages++;
 
-            const cost = modelCost(model, input, output);
+            // Prefer pre-calculated cost from transcript, fall back to our estimate
+            const preCalcCost = typeof usage.cost?.total === "number" ? usage.cost.total : null;
+            const cost = preCalcCost ?? modelCost(model, input, output);
             result.totalCost += cost;
             result.costByModel[model] = (result.costByModel[model] ?? 0) + cost;
           } catch { /* skip bad lines */ }
