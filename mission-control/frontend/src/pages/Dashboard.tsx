@@ -2,7 +2,6 @@ import { PageShell } from "../components/PageShell.js";
 import { StatusDot } from "../components/StatusDot.js";
 import { AnimCounter } from "../components/AnimCounter.js";
 import { Sparkline } from "../components/Sparkline.js";
-import { HeartbeatLine } from "../components/HeartbeatLine.js";
 import { usePolling, useGatewayStatus } from "../lib/hooks.js";
 import { postJSON } from "../lib/api.js";
 import { useState, useMemo, useRef } from "react";
@@ -177,7 +176,7 @@ export function Dashboard() {
           value={isAlive ? (data?.agent?.name ?? "Agent") : "Offline"}
           sub={data?.agent?.model ?? data?.agent?.version ?? "—"}
           accent={isAlive ? "#22c55e" : "#ef4444"}
-          heartbeat={isAlive}
+          status={isAlive ? "active" : "error"}
         />
         <StatCard
           label="Active Sessions"
@@ -384,7 +383,6 @@ function StatCard({
   status,
   spark,
   sparkColor,
-  heartbeat,
 }: {
   label: string;
   value: string | number;
@@ -393,7 +391,6 @@ function StatCard({
   status?: string;
   spark?: { v: number }[];
   sparkColor?: string;
-  heartbeat?: boolean;
 }) {
   return (
     <div
@@ -415,12 +412,7 @@ function StatCard({
         {typeof value === "number" ? <AnimCounter target={value} /> : value}
       </div>
       <div className="text-xs text-text-dim mt-1">{sub}</div>
-      {heartbeat !== undefined && (
-        <div className="absolute bottom-0 left-0 right-0 h-10 opacity-60">
-          <HeartbeatLine alive={heartbeat} />
-        </div>
-      )}
-      {spark && sparkColor && heartbeat === undefined && (
+      {spark && sparkColor && (
         <div className="absolute bottom-0 left-0 right-0 h-10 opacity-50">
           <Sparkline data={spark} color={sparkColor} height={40} />
         </div>
