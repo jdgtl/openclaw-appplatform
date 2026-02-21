@@ -13,7 +13,7 @@ import {
 import { useState } from "react";
 import { ThemeToggle } from "./ThemeToggle.js";
 import { StatusDot } from "./StatusDot.js";
-import { usePolling } from "../lib/hooks.js";
+import { usePolling, useGatewayStatus } from "../lib/hooks.js";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -32,9 +32,22 @@ interface StatusBrief {
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
-  const { data: status } = usePolling<StatusBrief>("/status", 30_000);
+  const { data: status, error, loading } = usePolling<StatusBrief>("/status", 30_000);
+  const gwConnected = useGatewayStatus();
   const agentName = status?.agent?.name ?? "Agent";
-  const agentStatus = status?.agent?.status === "active" ? "active" as const : "error" as const;
+
+  let agentStatus: string;
+  if (loading && !status) {
+    agentStatus = "idle";
+  } else if (error) {
+    agentStatus = "error";
+  } else if (!gwConnected) {
+    agentStatus = "paused";
+  } else if (status?.agent?.status === "active") {
+    agentStatus = "active";
+  } else {
+    agentStatus = "error";
+  }
 
   return (
     <aside
