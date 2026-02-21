@@ -106,7 +106,13 @@ function extractAgentModel(config: Record<string, unknown> | null): string | nul
   if (!config) return null;
   const agents = config.agents as Record<string, unknown> | undefined;
   const defaults = agents?.defaults as Record<string, unknown> | undefined;
-  return (defaults?.model as string) ?? null;
+  const model = defaults?.model;
+  if (typeof model === "string") return model;
+  if (model && typeof model === "object") {
+    const m = model as Record<string, unknown>;
+    if (typeof m.primary === "string") return m.primary;
+  }
+  return null;
 }
 
 function extractChannels(
