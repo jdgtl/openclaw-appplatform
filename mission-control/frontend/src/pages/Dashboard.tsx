@@ -26,6 +26,7 @@ interface StatusData {
     name: string | null;
     status: string;
     version: string | null;
+    model: string | null;
   };
   sessions: { count?: number; sessions?: { key: string }[] } | null;
   heartbeat: {
@@ -169,7 +170,7 @@ export function Dashboard() {
         <StatCard
           label="Agent Status"
           value={data?.agent?.name ?? "Offline"}
-          sub={data?.agent?.version ?? "—"}
+          sub={data?.agent?.model ?? data?.agent?.version ?? "—"}
           accent="#22c55e"
           status={data?.agent?.status}
         />

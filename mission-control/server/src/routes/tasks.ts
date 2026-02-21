@@ -1,9 +1,29 @@
 import { Router } from "express";
 import { randomBytes } from "node:crypto";
 import { readTasks, writeTasks, type TaskItem } from "../filesystem.js";
+import { notifySlack } from "../lib/slack-notify.js";
 
-const VALID_STATUSES = ["queue", "in_progress", "needs_human", "completed"];
+const VALID_STATUSES = ["todo", "planning", "in_progress", "review", "complete"];
 const VALID_PRIORITIES = ["low", "medium", "high"];
+
+// Migrate old statuses from the 4-column layout
+const STATUS_MIGRATION: Record<string, TaskItem["status"]> = {
+  queue: "todo",
+  needs_human: "review",
+  completed: "complete",
+};
+
+function migrateStatus(status: string): TaskItem["status"] {
+  return (STATUS_MIGRATION[status] ?? status) as TaskItem["status"];
+}
+
+function migrateTasks(tasks: TaskItem[]): TaskItem[] {
+  for (const t of tasks) {
+    const migrated = migrateStatus(t.status);
+    if (migrated !== t.status) t.status = migrated;
+  }
+  return tasks;
+}
 
 export function tasksRouter(): Router {
   const router = Router();
@@ -12,6 +32,7 @@ export function tasksRouter(): Router {
   router.get("/", async (_req, res) => {
     try {
       const data = await readTasks();
+      data.tasks = migrateTasks(data.tasks);
       res.json(data);
     } catch (err) {
       res.status(500).json({
@@ -22,12 +43,13 @@ export function tasksRouter(): Router {
 
   // Create task
   router.post("/", async (req, res) => {
-    const { title, description, status, priority, labels } = req.body;
+    const { title, description, status, priority, labels, prUrl } = req.body;
     if (!title || typeof title !== "string") {
       res.status(400).json({ error: "title string is required" });
       return;
     }
-    if (status && !VALID_STATUSES.includes(status)) {
+    const resolvedStatus = status ? migrateStatus(status) : "todo";
+    if (!VALID_STATUSES.includes(resolvedStatus)) {
       res.status(400).json({ error: "Invalid status" });
       return;
     }
@@ -42,14 +64,16 @@ export function tasksRouter(): Router {
 
     try {
       const data = await readTasks();
+      data.tasks = migrateTasks(data.tasks);
       const now = new Date().toISOString();
       const task: TaskItem = {
         id: randomBytes(8).toString("hex"),
         title,
         description: description || undefined,
-        status: status || "queue",
+        status: resolvedStatus as TaskItem["status"],
         priority: priority || undefined,
         labels: labels || undefined,
+        prUrl: prUrl || undefined,
         createdAt: now,
         updatedAt: now,
       };
@@ -74,6 +98,7 @@ export function tasksRouter(): Router {
 
     try {
       const data = await readTasks();
+      data.tasks = migrateTasks(data.tasks);
       const taskMap = new Map(data.tasks.map((t) => [t.id, t]));
 
       // Ordered tasks: those in the ids list, in the given order
@@ -101,9 +126,10 @@ export function tasksRouter(): Router {
 
   // Update task
   router.put("/:id", async (req, res) => {
-    const { title, description, status, priority, labels, expectedVersion } = req.body;
+    const { title, description, status, priority, labels, prUrl, expectedVersion } = req.body;
 
-    if (status !== undefined && !VALID_STATUSES.includes(status)) {
+    const resolvedStatus = status !== undefined ? migrateStatus(status) : undefined;
+    if (resolvedStatus !== undefined && !VALID_STATUSES.includes(resolvedStatus)) {
       res.status(400).json({ error: "Invalid status" });
       return;
     }
@@ -114,6 +140,7 @@ export function tasksRouter(): Router {
 
     try {
       const data = await readTasks();
+      data.tasks = migrateTasks(data.tasks);
 
       if (expectedVersion != null && data.version !== expectedVersion) {
         res.status(409).json({ error: "Version conflict", currentVersion: data.version });
@@ -126,16 +153,26 @@ export function tasksRouter(): Router {
         return;
       }
 
+      const previousStatus = task.status;
+
       if (title !== undefined) task.title = title;
       if (description !== undefined) task.description = description || undefined;
-      if (status !== undefined) task.status = status;
+      if (resolvedStatus !== undefined) task.status = resolvedStatus as TaskItem["status"];
       if (priority !== undefined) task.priority = priority || undefined;
       if (labels !== undefined) task.labels = labels;
+      if (prUrl !== undefined) task.prUrl = prUrl || undefined;
       task.updatedAt = new Date().toISOString();
 
       data.version++;
       await writeTasks(data);
       res.json(task);
+
+      // Fire Slack notification when transitioning to review
+      if (previousStatus !== "review" && task.status === "review") {
+        const prLine = task.prUrl ? `\nPR: ${task.prUrl}` : "";
+        const desc = task.description ? `\n>${task.description.slice(0, 200)}` : "";
+        notifySlack(`*Task ready for review:* ${task.title}${desc}${prLine}`);
+      }
     } catch (err) {
       res.status(500).json({
         error: err instanceof Error ? err.message : "Failed to update task",
@@ -146,24 +183,33 @@ export function tasksRouter(): Router {
   // Move task (change status)
   router.put("/:id/move", async (req, res) => {
     const { status } = req.body;
-    if (!status || !VALID_STATUSES.includes(status)) {
+    const resolvedStatus = status ? migrateStatus(status) : undefined;
+    if (!resolvedStatus || !VALID_STATUSES.includes(resolvedStatus)) {
       res.status(400).json({ error: "Valid status is required" });
       return;
     }
 
     try {
       const data = await readTasks();
+      data.tasks = migrateTasks(data.tasks);
       const task = data.tasks.find((t) => t.id === req.params.id);
       if (!task) {
         res.status(404).json({ error: "Task not found" });
         return;
       }
 
-      task.status = status;
+      const previousStatus = task.status;
+      task.status = resolvedStatus as TaskItem["status"];
       task.updatedAt = new Date().toISOString();
       data.version++;
       await writeTasks(data);
       res.json(task);
+
+      // Fire Slack notification when transitioning to review
+      if (previousStatus !== "review" && task.status === "review") {
+        const prLine = task.prUrl ? `\nPR: ${task.prUrl}` : "";
+        notifySlack(`*Task ready for review:* ${task.title}${prLine}`);
+      }
     } catch (err) {
       res.status(500).json({
         error: err instanceof Error ? err.message : "Failed to move task",

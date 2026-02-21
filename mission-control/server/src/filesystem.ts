@@ -320,9 +320,10 @@ export interface TaskItem {
   id: string;
   title: string;
   description?: string;
-  status: "queue" | "in_progress" | "needs_human" | "completed";
+  status: "todo" | "planning" | "in_progress" | "review" | "complete";
   priority?: "low" | "medium" | "high";
   labels?: string[];
+  prUrl?: string;
   createdAt: string;
   updatedAt: string;
 }

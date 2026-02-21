@@ -13,9 +13,10 @@ import {
   Pencil,
   GripVertical,
   Loader2,
+  GitPullRequest,
 } from "lucide-react";
 
-type TaskStatus = "queue" | "in_progress" | "needs_human" | "completed";
+type TaskStatus = "todo" | "planning" | "in_progress" | "review" | "complete";
 type Priority = "low" | "medium" | "high";
 
 interface TaskItem {
@@ -25,6 +26,7 @@ interface TaskItem {
   status: TaskStatus;
   priority?: Priority;
   labels?: string[];
+  prUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -35,10 +37,11 @@ interface TasksData {
 }
 
 const COLUMNS: { status: TaskStatus; label: string; color: string }[] = [
-  { status: "queue", label: "Queue", color: "text-text-dim" },
+  { status: "todo",        label: "To Do",       color: "text-text-dim" },
+  { status: "planning",    label: "Planning",    color: "text-purple-400" },
   { status: "in_progress", label: "In Progress", color: "text-accent" },
-  { status: "needs_human", label: "Needs Human", color: "text-warning" },
-  { status: "completed", label: "Completed", color: "text-success" },
+  { status: "review",      label: "Review",      color: "text-warning" },
+  { status: "complete",    label: "Complete",     color: "text-success" },
 ];
 
 export function Tasks() {
@@ -49,7 +52,7 @@ export function Tasks() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [hoverTask, setHoverTask] = useState<string | null>(null);
 
-  // Drag state for queue column
+  // Drag state for todo column
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
@@ -63,7 +66,7 @@ export function Tasks() {
     }
   }, [deleteTarget]);
 
-  const handleCreate = async (task: { title: string; description?: string; status: TaskStatus; priority?: Priority; labels?: string[] }) => {
+  const handleCreate = async (task: { title: string; description?: string; status: TaskStatus; priority?: Priority; labels?: string[]; prUrl?: string }) => {
     try {
       await postJSON("/tasks", task);
       setShowNew(false);
@@ -147,10 +150,10 @@ export function Tasks() {
       <div className="flex gap-3 overflow-x-auto pb-2 min-h-[400px]">
         {COLUMNS.map((col) => {
           const colTasks = tasks.filter((t) => t.status === col.status);
-          const isDraggableCol = col.status === "queue";
+          const isDraggableCol = col.status === "todo";
 
           return (
-            <div key={col.status} className="flex flex-col min-w-[260px] flex-1">
+            <div key={col.status} className="flex flex-col min-w-[220px] flex-1">
               {/* Column header */}
               <div className="flex items-center gap-2 mb-2 px-1">
                 <span className={`text-xs font-semibold uppercase tracking-wider ${col.color}`}>
@@ -223,7 +226,7 @@ export function Tasks() {
                       </div>
                     </div>
 
-                    {/* Priority + labels */}
+                    {/* Priority + labels + PR link */}
                     <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                       {task.priority && <PriorityBadge priority={task.priority} />}
                       {task.labels?.map((label) => (
@@ -234,6 +237,18 @@ export function Tasks() {
                           {label}
                         </span>
                       ))}
+                      {task.prUrl && (
+                        <a
+                          href={task.prUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors"
+                        >
+                          <GitPullRequest size={10} />
+                          PR
+                        </a>
+                      )}
                     </div>
 
                     {/* Date */}
@@ -298,22 +313,27 @@ function TaskFormModal({
     status: TaskStatus;
     priority?: Priority;
     labels?: string[];
+    prUrl?: string;
   }) => void;
 }) {
   const [title, setTitle] = useState(initial?.title ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
-  const [status, setStatus] = useState<TaskStatus>(initial?.status ?? "queue");
+  const [status, setStatus] = useState<TaskStatus>(initial?.status ?? "todo");
   const [priority, setPriority] = useState<Priority | "">(initial?.priority ?? "");
   const [labelsText, setLabelsText] = useState(initial?.labels?.join(", ") ?? "");
+  const [prUrl, setPrUrl] = useState(initial?.prUrl ?? "");
 
   // Reset form when initial changes (different task or open/close)
   useEffect(() => {
     setTitle(initial?.title ?? "");
     setDescription(initial?.description ?? "");
-    setStatus(initial?.status ?? "queue");
+    setStatus(initial?.status ?? "todo");
     setPriority(initial?.priority ?? "");
     setLabelsText(initial?.labels?.join(", ") ?? "");
+    setPrUrl(initial?.prUrl ?? "");
   }, [initial?.id, open]);
+
+  const showPrField = status === "review" || status === "complete";
 
   const handleSubmit = () => {
     if (!title.trim()) return;
@@ -327,6 +347,7 @@ function TaskFormModal({
       status,
       priority: priority || undefined,
       labels: labels.length > 0 ? labels : undefined,
+      prUrl: prUrl.trim() || undefined,
     });
   };
 
@@ -387,6 +408,16 @@ function TaskFormModal({
             placeholder="bug, feature, docs"
           />
         </div>
+        {showPrField && (
+          <div>
+            <FormLabel>PR URL</FormLabel>
+            <FormInput
+              value={prUrl}
+              onChange={(e) => setPrUrl(e.currentTarget.value)}
+              placeholder="https://github.com/..."
+            />
+          </div>
+        )}
       </div>
       <ModalActions
         onCancel={onClose}

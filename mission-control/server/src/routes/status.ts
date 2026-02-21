@@ -62,11 +62,14 @@ export function statusRouter(gateway: GatewayClient): Router {
     const version =
       openclawVersion.status === "fulfilled" ? openclawVersion.value : null;
 
+    const agentModel = extractAgentModel(configVal);
+
     const data = {
       agent: {
         name: agentName,
         status: gatewayAlive ? "active" : "error",
         version,
+        model: agentModel,
       },
       sessions: sessionsData,
       heartbeat:
@@ -97,6 +100,13 @@ function extractAgentName(config: Record<string, unknown> | null): string | null
   const agents = config.agents as Record<string, unknown> | undefined;
   const defaults = agents?.defaults as Record<string, unknown> | undefined;
   return (defaults?.name as string) ?? null;
+}
+
+function extractAgentModel(config: Record<string, unknown> | null): string | null {
+  if (!config) return null;
+  const agents = config.agents as Record<string, unknown> | undefined;
+  const defaults = agents?.defaults as Record<string, unknown> | undefined;
+  return (defaults?.model as string) ?? null;
 }
 
 function extractChannels(
