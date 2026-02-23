@@ -135,6 +135,7 @@ export function Dashboard() {
   const costData = useMemo(() => {
     if (!usageData?.costByModel) return [];
     return Object.entries(usageData.costByModel)
+      .filter(([, cost]) => cost > 0)
       .map(([model, cost], i) => ({
         name: model.split("-").slice(0, 2).join("-"),
         cost: parseFloat(cost.toFixed(2)),
@@ -195,7 +196,7 @@ export function Dashboard() {
         <StatCard
           label="Est. Cost"
           value={`$${totalCost.toFixed(2)}`}
-          sub={`${Object.keys(usageData?.byModel ?? {}).length} models active`}
+          sub={`${costData.length} models active`}
           accent="#f59e0b"
           spark={costSparkRef.current}
           sparkColor="#f59e0b"

@@ -51,6 +51,7 @@ export function Usage() {
         total: stats.input + stats.output,
         cost: data.costByModel?.[model] ?? 0,
       }))
+      .filter((m) => m.cost > 0)
       .sort((a, b) => b.total - a.total);
   }, [data]);
 

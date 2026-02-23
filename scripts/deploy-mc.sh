@@ -24,19 +24,12 @@ echo "==> Building MC server..."
 
 echo "==> Deploying to $SSH_USER@$HOST..."
 
-# Sync frontend dist
-rsync -az --delete \
-  -e "ssh $SSH_OPTS" \
-  "$FRONTEND_DIR/dist/" \
-  "$SSH_USER@$HOST:$REMOTE_MC/frontend/dist/"
-
-# Sync server dist
-rsync -az --delete \
-  -e "ssh $SSH_OPTS" \
-  "$SERVER_DIR/dist/" \
-  "$SSH_USER@$HOST:$REMOTE_MC/server/dist/"
+# Clear remote dist dirs and upload fresh builds via scp (rsync not available on container)
+ssh $SSH_OPTS "$SSH_USER@$HOST" "rm -rf $REMOTE_MC/frontend/dist $REMOTE_MC/server/dist"
+scp -r $SSH_OPTS "$FRONTEND_DIR/dist" "$SSH_USER@$HOST:$REMOTE_MC/frontend/dist"
+scp -r $SSH_OPTS "$SERVER_DIR/dist" "$SSH_USER@$HOST:$REMOTE_MC/server/dist"
 
 echo "==> Restarting Mission Control..."
-ssh $SSH_OPTS "$SSH_USER@$HOST" "pkill -u openclaw -f 'node /opt/mission-control' || true"
+ssh -o ConnectTimeout=10 -o ServerAliveInterval=5 $SSH_OPTS "$SSH_USER@$HOST" "pkill -u openclaw -f 'node /opt/mission-control' || true" 2>/dev/null || true
 
 echo "==> Done. MC deployed to $HOST"
