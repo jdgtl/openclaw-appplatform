@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { GatewayClient } from "./gateway.js";
 import { GatewayWS } from "./gateway-ws.js";
 import { attachBrowserWS } from "./browser-ws.js";
+import { MockGatewayClient } from "./mock-gateway.js";
 import { statusRouter } from "./routes/status.js";
 import { sessionsRouter } from "./routes/sessions.js";
 import { cronRouter } from "./routes/cron.js";
@@ -18,15 +19,20 @@ import { tasksRouter } from "./routes/tasks.js";
 const port = parseInt(process.env.MC_PORT || "3333", 10);
 const gatewayPort = process.env.GATEWAY_PORT || "18789";
 const gatewayToken = process.env.OPENCLAW_GATEWAY_TOKEN || "";
+const useMock = process.env.MOCK === "true";
 
-if (!gatewayToken) {
+if (useMock) {
+  console.log("[mission-control] MOCK mode — using in-memory mock gateway");
+} else if (!gatewayToken) {
   console.warn("[mission-control] WARNING: OPENCLAW_GATEWAY_TOKEN not set — gateway calls will fail");
 }
 
 const gatewayBaseUrl = `http://127.0.0.1:${gatewayPort}`;
 
 // HTTP client for tool invocations (status, sessions, cron, system)
-const gateway = new GatewayClient(gatewayBaseUrl, gatewayToken);
+const gateway: GatewayClient = useMock
+  ? (new MockGatewayClient() as unknown as GatewayClient)
+  : new GatewayClient(gatewayBaseUrl, gatewayToken);
 
 // WebSocket client for chat streaming
 const gatewayWs = new GatewayWS(
@@ -62,17 +68,19 @@ app.get("/{*path}", (_req, res) => {
 
 const server = app.listen(port, async () => {
   console.log(`[mission-control] Listening on http://127.0.0.1:${port}`);
-  console.log(`[mission-control] Gateway: ${gatewayBaseUrl}`);
+  console.log(`[mission-control] Gateway: ${useMock ? "MOCK" : gatewayBaseUrl}`);
 
-  // Connect WS to gateway (non-blocking — will retry on failure)
-  try {
-    await gatewayWs.connect();
-  } catch (err) {
-    console.warn(
-      "[mission-control] Gateway WS initial connect failed:",
-      (err as Error).message,
-      "— will retry",
-    );
+  // Connect WS to gateway (skip in mock mode)
+  if (!useMock) {
+    try {
+      await gatewayWs.connect();
+    } catch (err) {
+      console.warn(
+        "[mission-control] Gateway WS initial connect failed:",
+        (err as Error).message,
+        "— will retry",
+      );
+    }
   }
 });
 
