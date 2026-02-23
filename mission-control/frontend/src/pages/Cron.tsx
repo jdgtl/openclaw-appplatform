@@ -276,6 +276,7 @@ function AddJobModal({ onClose }: { onClose: () => void }) {
   const [payloadKind, setPayloadKind] = useState("agentTurn");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   const isValid =
     name.trim() &&
@@ -284,6 +285,7 @@ function AddJobModal({ onClose }: { onClose: () => void }) {
   const handleSubmit = async () => {
     if (!isValid) return;
     setSaving(true);
+    setError("");
     try {
       const schedule =
         scheduleKind === "every"
@@ -306,8 +308,8 @@ function AddJobModal({ onClose }: { onClose: () => void }) {
         },
       });
       onClose();
-    } catch {
-      // ignore
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create cron job");
     } finally {
       setSaving(false);
     }
@@ -449,6 +451,11 @@ function AddJobModal({ onClose }: { onClose: () => void }) {
           <span className="text-xs text-text">{enabled ? "Enabled" : "Disabled"}</span>
         </div>
       </div>
+      {error && (
+        <div className="mx-6 mb-2 px-3 py-2 rounded-lg bg-danger/10 border border-danger/20 text-danger text-xs">
+          {error}
+        </div>
+      )}
       <ModalActions
         onCancel={onClose}
         onSubmit={handleSubmit}

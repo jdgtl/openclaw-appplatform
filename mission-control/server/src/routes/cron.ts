@@ -182,11 +182,11 @@ export function cronRouter(gateway: GatewayClient): Router {
       gatewayJob.schedule = job.schedule;
     }
 
-    // Payload
+    // Payload — always set (gateway may require it)
     const payloadKind = job.payloadKind ?? "agentTurn";
-    if (payloadKind === "agentTurn" && job.message) {
-      gatewayJob.payload = { kind: "agentTurn", message: job.message };
-    } else if (payloadKind === "wake") {
+    if (payloadKind === "agentTurn") {
+      gatewayJob.payload = { kind: "agentTurn", message: job.message || "" };
+    } else {
       gatewayJob.payload = { kind: "wake" };
     }
 
@@ -203,7 +203,7 @@ export function cronRouter(gateway: GatewayClient): Router {
     try {
       const raw = await gateway.invokeTool("cron", {
         action: "add",
-        job: gatewayJob,
+        ...gatewayJob,
       });
       const data = unwrapToolResult(raw) as Record<string, unknown>;
       const normalized = normalizeJob(data);
@@ -218,6 +218,7 @@ export function cronRouter(gateway: GatewayClient): Router {
 
       res.json(normalized);
     } catch (err) {
+      console.error("[cron] Failed to create job:", err instanceof Error ? err.message : err);
       res.status(502).json({
         error: err instanceof Error ? err.message : "Failed to create cron job",
       });
