@@ -19,12 +19,7 @@ export function HeaderBar() {
   return (
     <header className="h-14 shrink-0 border-b border-border bg-header-bg flex items-center justify-between px-5">
       <h1 className="text-base font-semibold text-text">{pageName}</h1>
-      <div className="flex items-center gap-4">
-        <LiveClock />
-        <div className="h-8 w-8 rounded-full bg-gradient-to-br from-accent to-cyan-700 flex items-center justify-center text-[11px] font-bold text-white">
-          SC
-        </div>
-      </div>
+      <LiveClock />
     </header>
   );
 }

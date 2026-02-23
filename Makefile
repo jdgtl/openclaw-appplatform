@@ -1,4 +1,4 @@
-.PHONY: rebuild logs shell test test-all
+.PHONY: rebuild logs shell test test-all deploy-mc
 
 rebuild:
 	docker compose down
@@ -55,3 +55,6 @@ test-all:
 	done; \
 	echo ""; \
 	echo "All tests passed!"
+
+deploy-mc:
+	@bash scripts/deploy-mc.sh $(HOST)

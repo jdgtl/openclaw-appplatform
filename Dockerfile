@@ -105,13 +105,7 @@ RUN set -eux; \
   apt-get clean; \
   rm -rf /var/lib/apt/lists/*
 
-# Apply rootfs overlay early - allows user creation to use existing home directories
-COPY rootfs/ /
-
-# Apply build-time permissions from config
-RUN source /etc/s6-overlay/lib/env-utils.sh && apply_permissions
-
-# Create non-root user (using existing home directory from rootfs)
+# Create non-root user
 RUN useradd -m -s /bin/bash openclaw \
   && mkdir -p "${OPENCLAW_STATE_DIR}" "${OPENCLAW_WORKSPACE_DIR}" \
   && ln -s ${OPENCLAW_STATE_DIR} /home/openclaw/.openclaw \
@@ -147,6 +141,10 @@ USER root
 
 # Fix ownership for any files in home directories (in case ubuntu user exists)
 RUN if [ -d /home/ubuntu ]; then chown -R ubuntu:ubuntu /home/ubuntu; fi
+
+# Apply rootfs overlay (after expensive installs — rootfs changes won't bust cache)
+COPY rootfs/ /
+RUN source /etc/s6-overlay/lib/env-utils.sh && apply_permissions
 
 # Generate initial package selections list (for restore capability)
 RUN dpkg --get-selections > /etc/openclaw/dpkg-selections
