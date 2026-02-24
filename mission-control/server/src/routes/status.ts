@@ -120,10 +120,21 @@ function extractAgentModel(config: Record<string, unknown> | null): string | nul
 
 function extractHeartbeatInterval(config: Record<string, unknown> | null): string | null {
   if (!config) return null;
+
+  // Settings page stores heartbeat at config.heartbeat
+  const hb = config.heartbeat as Record<string, unknown> | undefined;
+  if (hb && hb.enabled !== false) {
+    const mins = hb.intervalMinutes as number | undefined;
+    if (mins && mins > 0) return `${mins}m`;
+    const interval = hb.interval as number | string | undefined;
+    if (interval) return typeof interval === "number" ? `${interval}m` : interval;
+  }
+
+  // Fallback: agents.defaults.heartbeat.every (legacy/alternate format)
   const agents = config.agents as Record<string, unknown> | undefined;
   const defaults = agents?.defaults as Record<string, unknown> | undefined;
-  const heartbeat = defaults?.heartbeat as Record<string, unknown> | undefined;
-  const every = heartbeat?.every as string | undefined;
+  const agentHb = defaults?.heartbeat as Record<string, unknown> | undefined;
+  const every = agentHb?.every as string | undefined;
   if (!every || every === "0m" || every === "0") return null;
   return every;
 }
