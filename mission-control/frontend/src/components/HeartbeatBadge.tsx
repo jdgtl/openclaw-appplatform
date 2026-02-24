@@ -22,7 +22,7 @@ export function HeartbeatBadge() {
         {/* Mini ECG trace: flat — spike — flat */}
         <path
           d="M1 13h5l2-5 3 10 2-8 1.5 3H22"
-          stroke={active ? "#22c55e" : "var(--text-dim)"}
+          stroke={active ? "#ef4444" : "var(--text-dim)"}
           strokeWidth={2}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -30,7 +30,7 @@ export function HeartbeatBadge() {
       </svg>
       <span
         className="text-[11px] tabular-nums"
-        style={{ color: active ? "#22c55e" : "var(--text-faint)" }}
+        style={{ color: active ? "#ef4444" : "var(--text-faint)" }}
       >
         {active ? interval : "off"}
       </span>
