@@ -42,12 +42,19 @@ export function configRouter(gateway: GatewayClient): Router {
     }
   });
 
-  // Read heartbeat section
+  // Read heartbeat section (stored at agents.defaults.heartbeat)
   router.get("/heartbeat", async (_req, res) => {
     try {
       const config = await readConfig();
-      const heartbeat = (config?.heartbeat ?? {}) as Record<string, unknown>;
-      res.json(heartbeat);
+      const agents = config?.agents as Record<string, unknown> | undefined;
+      const defaults = agents?.defaults as Record<string, unknown> | undefined;
+      const hb = defaults?.heartbeat as Record<string, unknown> | undefined;
+
+      // Translate gateway format (every: "30m") to UI format (enabled, intervalMinutes)
+      const every = hb?.every as string | undefined;
+      const enabled = !!every && every !== "0m" && every !== "0";
+      const mins = every ? parseInt(every) || 30 : 30;
+      res.json({ enabled, intervalMinutes: mins });
     } catch (err) {
       res.status(500).json({
         error: err instanceof Error ? err.message : "Failed to read heartbeat config",
@@ -55,7 +62,7 @@ export function configRouter(gateway: GatewayClient): Router {
     }
   });
 
-  // Update heartbeat section
+  // Update heartbeat section (stored at agents.defaults.heartbeat)
   router.put("/heartbeat", async (req, res) => {
     const { heartbeat } = req.body;
     if (!heartbeat || typeof heartbeat !== "object") {
@@ -65,7 +72,22 @@ export function configRouter(gateway: GatewayClient): Router {
 
     try {
       const config = (await readConfig()) ?? {};
-      config.heartbeat = heartbeat;
+
+      // Remove legacy root-level heartbeat key (causes config validation error)
+      delete config.heartbeat;
+
+      // Ensure agents.defaults path exists
+      if (!config.agents || typeof config.agents !== "object") config.agents = {};
+      const agents = config.agents as Record<string, unknown>;
+      if (!agents.defaults || typeof agents.defaults !== "object") agents.defaults = {};
+      const defaults = agents.defaults as Record<string, unknown>;
+
+      // Write in gateway format: { every: "30m" }
+      const mins = heartbeat.intervalMinutes ?? heartbeat.interval ?? 30;
+      defaults.heartbeat = {
+        every: heartbeat.enabled ? `${mins}m` : "0m",
+      };
+
       await writeConfig(config);
       const reloadError = await gateway.reloadConfig()
         .then(() => null)

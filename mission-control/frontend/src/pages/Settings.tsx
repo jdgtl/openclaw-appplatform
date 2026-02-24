@@ -54,10 +54,14 @@ export function Settings() {
       setDirty(false);
       setError(null);
 
-      const hb = config.heartbeat as Record<string, unknown> | undefined;
-      if (hb) {
-        setHeartbeatEnabled(hb.enabled !== false);
-        setHeartbeatInterval(String(hb.intervalMinutes ?? hb.interval ?? "30"));
+      // Heartbeat lives at agents.defaults.heartbeat (gateway format: { every: "30m" })
+      const agents = config.agents as Record<string, unknown> | undefined;
+      const defaults = agents?.defaults as Record<string, unknown> | undefined;
+      const hb = defaults?.heartbeat as Record<string, unknown> | undefined;
+      if (hb?.every) {
+        const every = hb.every as string;
+        setHeartbeatEnabled(every !== "0m" && every !== "0");
+        setHeartbeatInterval(String(parseInt(every) || 30));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load config");
