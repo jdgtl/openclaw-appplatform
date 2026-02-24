@@ -110,8 +110,19 @@ with_env_prefix() {
   [[ "$1" == "--" ]] && shift
 
   if [[ -n "$run_user" ]]; then
-    # Use runuser for proper login shell, source env vars and user's bashrc inside the shell
-    exec runuser -l "$run_user" -c "source /etc/s6-overlay/lib/env-utils.sh && [[ -f ~/.bashrc ]] && source ~/.bashrc; source_env_prefix $prefix && $*" 2>&1
+    # Use runuser for proper login shell, source env vars and user's bashrc inside the shell.
+    # .bashrc has a non-interactive guard that skips nvm/pnpm setup, so source them explicitly.
+    exec runuser -l "$run_user" -c "
+      source /etc/s6-overlay/lib/env-utils.sh
+      [[ -f ~/.bashrc ]] && source ~/.bashrc
+      # Explicitly load nvm/pnpm/brew (skipped by .bashrc non-interactive guard)
+      export NVM_DIR=\"\$HOME/.nvm\"
+      [[ -s \"\$NVM_DIR/nvm.sh\" ]] && source \"\$NVM_DIR/nvm.sh\"
+      export PNPM_HOME=\"\$HOME/.local/share/pnpm\"
+      [[ -d \"\$PNPM_HOME\" ]] && export PATH=\"\$PNPM_HOME:\$PATH\"
+      [[ -d /home/linuxbrew/.linuxbrew/bin ]] && export PATH=\"/home/linuxbrew/.linuxbrew/bin:\$PATH\"
+      source_env_prefix $prefix && $*
+    " 2>&1
   else
     exec env -i PATH="$PATH" /command/s6-envdir "$ENV_BASE/$prefix" "$@" 2>&1
   fi
