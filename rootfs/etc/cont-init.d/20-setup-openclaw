@@ -260,12 +260,32 @@ mkdir -p /data/.openclaw/cron
 # Add gateway auth token and trust localhost proxy (Mission Control)
 echo "[generate-config] Adding gateway.auth.token to config"
 # Build allowedOrigins: MC localhost + Tailscale HTTPS origins (for browser Control UI access)
+# Use actual Tailscale hostname from state (restored from backup) or TS_HOSTNAME env var,
+# falling back to STABLE_HOSTNAME. The TS hostname can differ from STABLE_HOSTNAME when
+# manually changed via `tailscale set --hostname`.
+source_env_prefix TS_
+TS_TAILNET="taila801b3.ts.net"
 ALLOWED_ORIGINS='["http://127.0.0.1:3333"'
-if [ -n "$STABLE_HOSTNAME" ]; then
-  TS_FQDN="${STABLE_HOSTNAME}.taila801b3.ts.net"
-  ALLOWED_ORIGINS="${ALLOWED_ORIGINS}, \"https://${TS_FQDN}\", \"https://${TS_FQDN}:3333\""
-  echo "[generate-config] Adding Tailscale origins: https://${TS_FQDN}, https://${TS_FQDN}:3333"
+_add_ts_origin() {
+  local hn="$1"
+  [ -z "$hn" ] && return
+  local fqdn="${hn}.${TS_TAILNET}"
+  # Avoid duplicates
+  case "$ALLOWED_ORIGINS" in
+    *"${fqdn}"*) return ;;
+  esac
+  ALLOWED_ORIGINS="${ALLOWED_ORIGINS}, \"https://${fqdn}\", \"https://${fqdn}:3333\""
+  echo "[generate-config] Adding Tailscale origins: https://${fqdn}, https://${fqdn}:3333"
+}
+# Try reading actual TS hostname from persisted state (available after backup restore)
+if [ -f /data/tailscale/tailscaled.state ]; then
+  TS_ACTUAL=$(jq -r '.Config.Hostname // empty' /data/tailscale/tailscaled.state 2>/dev/null || true)
+  [ -z "$TS_ACTUAL" ] && TS_ACTUAL=$(strings /data/tailscale/tailscaled.state 2>/dev/null | grep -oP '"Hostname":"[^"]+"' | head -1 | cut -d'"' -f4 || true)
+  _add_ts_origin "$TS_ACTUAL"
 fi
+# Also add TS_HOSTNAME (from env/persist) and STABLE_HOSTNAME as fallbacks
+_add_ts_origin "${TS_HOSTNAME:-}"
+_add_ts_origin "${STABLE_HOSTNAME:-}"
 ALLOWED_ORIGINS="${ALLOWED_ORIGINS}]"
 jq --arg token "$OPENCLAW_GATEWAY_TOKEN" --argjson origins "$ALLOWED_ORIGINS" '.gateway.auth.token = $token | .gateway.auth.mode = "token" | .gateway.trustedProxies = ["127.0.0.1"] | .gateway.controlUi.allowedOrigins = $origins' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
 
