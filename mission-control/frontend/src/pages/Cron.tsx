@@ -4,15 +4,15 @@ import { StatusDot } from "../components/StatusDot.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
 import { Modal, FormLabel, FormInput, FormSelect, FormTextarea, ModalActions } from "../components/Modal.js";
 import { usePolling } from "../lib/hooks.js";
-import { fetchJSON, postJSON, deleteJSON } from "../lib/api.js";
+import { fetchJSON, postJSON, putJSON, deleteJSON } from "../lib/api.js";
 import {
-  Clock,
   Play,
   Trash2,
   Plus,
   Loader2,
   ToggleLeft,
   ToggleRight,
+  Pencil,
 } from "lucide-react";
 
 interface CronJob {
@@ -44,6 +44,7 @@ export function Cron() {
   const { data, loading, refetch } = usePolling<CronResponse>("/cron", 30_000);
   const jobs = data?.jobs ?? [];
   const [showAdd, setShowAdd] = useState(false);
+  const [editTarget, setEditTarget] = useState<CronJob | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
@@ -189,7 +190,7 @@ export function Cron() {
                   </div>
                 </div>
 
-                {/* Status + toggle */}
+                {/* Actions */}
                 <div className="flex items-center gap-2.5">
                   <StatusDot status={job.enabled ? "active" : "paused"} />
                   <button
@@ -204,6 +205,14 @@ export function Cron() {
                     ) : (
                       <ToggleLeft size={14} />
                     )}
+                  </button>
+                  <button
+                    onClick={() => setEditTarget(job)}
+                    disabled={actionLoading === job.id}
+                    title="Edit"
+                    className="w-[30px] h-[30px] rounded-md border border-border bg-surface flex items-center justify-center text-text-muted hover:text-accent hover:border-border-hover transition-colors"
+                  >
+                    <Pencil size={14} />
                   </button>
                   <button
                     onClick={() => handleRun(job.id)}
@@ -246,7 +255,10 @@ export function Cron() {
       />
 
       {/* Add Job Modal */}
-      {showAdd && <AddJobModal onClose={() => { setShowAdd(false); refetch(); }} />}
+      {showAdd && <JobFormModal onClose={() => { setShowAdd(false); refetch(); }} />}
+
+      {/* Edit Job Modal */}
+      {editTarget && <JobFormModal job={editTarget} onClose={() => { setEditTarget(null); refetch(); }} />}
     </PageShell>
   );
 }
@@ -258,26 +270,43 @@ interface CronOptions {
   models: { id: string; name: string; provider: string }[];
 }
 
-function AddJobModal({ onClose }: { onClose: () => void }) {
+/** Parse a normalized schedule string back to form values */
+function parseSchedule(s: string): { kind: "every" | "cron"; value: string; unit: string; expr: string } {
+  const m = s.match(/^Every\s+([\d.]+)(m|h|d)$/);
+  if (m) {
+    const unitMap: Record<string, string> = { m: "minutes", h: "hours", d: "days" };
+    return { kind: "every", value: m[1], unit: unitMap[m[2]] ?? "minutes", expr: "" };
+  }
+  const m2 = s.match(/^Every\s+(\d+)\s+(\w+)$/);
+  if (m2) return { kind: "every", value: m2[1], unit: m2[2], expr: "" };
+  if (s && s !== "unknown") return { kind: "cron", value: "30", unit: "minutes", expr: s };
+  return { kind: "every", value: "30", unit: "minutes", expr: "" };
+}
+
+function JobFormModal({ job, onClose }: { job?: CronJob; onClose: () => void }) {
+  const editing = !!job;
+
   const [opts, setOpts] = useState<CronOptions | null>(null);
   useEffect(() => {
     fetchJSON<CronOptions>("/cron/options").then(setOpts).catch(() => {});
   }, []);
 
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("General");
-  const [enabled, setEnabled] = useState(true);
-  const [scheduleKind, setScheduleKind] = useState<"every" | "cron">("every");
-  const [everyValue, setEveryValue] = useState("30");
-  const [everyUnit, setEveryUnit] = useState("minutes");
-  const [cronExpr, setCronExpr] = useState("");
-  const [agentId, setAgentId] = useState("default");
-  const [session, setSession] = useState("isolated");
-  const [wakeMode, setWakeMode] = useState("now");
+  const parsed = job ? parseSchedule(job.schedule) : null;
+
+  const [name, setName] = useState(job?.name ?? "");
+  const [description, setDescription] = useState(job?.description ?? "");
+  const [category, setCategory] = useState(job?.category ?? "General");
+  const [enabled, setEnabled] = useState(job?.enabled ?? true);
+  const [scheduleKind, setScheduleKind] = useState<"every" | "cron">(parsed?.kind ?? "every");
+  const [everyValue, setEveryValue] = useState(parsed?.value ?? "30");
+  const [everyUnit, setEveryUnit] = useState(parsed?.unit ?? "minutes");
+  const [cronExpr, setCronExpr] = useState(parsed?.expr ?? "");
+  const [agentId, setAgentId] = useState(job?.agentId ?? "default");
+  const [session, setSession] = useState(job?.sessionTarget ?? "isolated");
+  const [wakeMode, setWakeMode] = useState(job?.wakeMode ?? "now");
   const [model, setModel] = useState("");
-  const [payloadKind, setPayloadKind] = useState("agentTurn");
-  const [message, setMessage] = useState("");
+  const [payloadKind, setPayloadKind] = useState(job?.message !== undefined ? "agentTurn" : "agentTurn");
+  const [message, setMessage] = useState(job?.message ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -295,7 +324,7 @@ function AddJobModal({ onClose }: { onClose: () => void }) {
           ? { kind: "every", value: Number(everyValue), unit: everyUnit }
           : { kind: "cron", expr: cronExpr };
 
-      await postJSON("/cron", {
+      const payload = {
         job: {
           name,
           description: description || undefined,
@@ -309,17 +338,23 @@ function AddJobModal({ onClose }: { onClose: () => void }) {
           payloadKind,
           message: payloadKind === "agentTurn" ? message || undefined : undefined,
         },
-      });
+      };
+
+      if (editing) {
+        await putJSON(`/cron/${job.id}`, payload);
+      } else {
+        await postJSON("/cron", payload);
+      }
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create cron job");
+      setError(err instanceof Error ? err.message : `Failed to ${editing ? "update" : "create"} cron job`);
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Modal open onClose={onClose} title="New Cron Job">
+    <Modal open onClose={onClose} title={editing ? "Edit Cron Job" : "New Cron Job"}>
       <div className="p-6 flex flex-col gap-5">
         {/* Identity */}
         <div className="grid grid-cols-2 gap-3">
@@ -462,7 +497,7 @@ function AddJobModal({ onClose }: { onClose: () => void }) {
       <ModalActions
         onCancel={onClose}
         onSubmit={handleSubmit}
-        submitLabel={saving ? "Creating..." : "Create Job"}
+        submitLabel={saving ? (editing ? "Saving..." : "Creating...") : (editing ? "Save Changes" : "Create Job")}
         disabled={saving || !isValid}
       />
     </Modal>

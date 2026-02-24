@@ -260,6 +260,86 @@ export function cronRouter(gateway: GatewayClient): Router {
     }
   });
 
+  // Update a cron job
+  router.put("/:id", async (req, res) => {
+    const { job } = req.body;
+    if (!job) {
+      res.status(400).json({ error: "job object is required" });
+      return;
+    }
+
+    const patch: Record<string, unknown> = {};
+    if (job.name !== undefined) patch.name = job.name;
+    if (job.description !== undefined) patch.description = job.description;
+    if (job.enabled !== undefined) patch.enabled = job.enabled;
+    if (job.agentId !== undefined) patch.agentId = job.agentId;
+    if (job.sessionTarget !== undefined) patch.sessionTarget = job.sessionTarget;
+    if (job.wakeMode !== undefined) patch.wakeMode = job.wakeMode;
+    if (job.model !== undefined) patch.model = job.model;
+
+    // Schedule
+    if (job.schedule) {
+      if (typeof job.schedule === "string") {
+        patch.schedule = { kind: "cron", expr: job.schedule };
+      } else if (job.schedule.kind === "every" && job.schedule.value && job.schedule.unit) {
+        const multipliers: Record<string, number> = { minutes: 60_000, hours: 3_600_000, days: 86_400_000 };
+        const everyMs = Number(job.schedule.value) * (multipliers[job.schedule.unit] ?? 60_000);
+        patch.schedule = { kind: "every", everyMs };
+      } else {
+        patch.schedule = job.schedule;
+      }
+    }
+
+    // Payload
+    if (job.payloadKind !== undefined || job.message !== undefined) {
+      const payloadKind = job.payloadKind ?? "agentTurn";
+      if (payloadKind === "agentTurn") {
+        patch.payload = { kind: "agentTurn", message: job.message || "" };
+      } else {
+        patch.payload = { kind: "wake" };
+      }
+    }
+
+    // Delivery
+    if (job.delivery || job.timeout || job.channel || job.to) {
+      const delivery: Record<string, unknown> = {};
+      if (job.delivery) delivery.mode = job.delivery;
+      if (job.timeout) delivery.timeout = Number(job.timeout);
+      if (job.channel) delivery.channel = job.channel;
+      if (job.to) delivery.to = job.to;
+      patch.delivery = delivery;
+    }
+
+    try {
+      const raw = await gateway.invokeTool("cron", {
+        action: "update",
+        jobId: req.params.id,
+        patch,
+      });
+      const data = unwrapToolResult(raw) as Record<string, unknown>;
+      const normalized = normalizeJob(data);
+
+      // Update local category if provided
+      if (job.category !== undefined) {
+        const categories = await readCronCategories();
+        if (job.category) {
+          categories[req.params.id] = job.category;
+          normalized.category = job.category;
+        } else {
+          delete categories[req.params.id];
+        }
+        await writeCronCategories(categories);
+      }
+
+      res.json(normalized);
+    } catch (err) {
+      console.error("[cron] Failed to update job:", err instanceof Error ? err.message : err);
+      res.status(502).json({
+        error: err instanceof Error ? err.message : "Failed to update cron job",
+      });
+    }
+  });
+
   // Toggle a cron job
   router.post("/:id/toggle", async (req, res) => {
     const { enabled } = req.body;
