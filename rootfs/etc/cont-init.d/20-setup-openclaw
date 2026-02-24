@@ -252,6 +252,11 @@ HBEOF
   echo "[generate-config] Created default HEARTBEAT.md"
 fi
 
+# Enable cron scheduler (required for cron tool add/update/remove to work)
+echo "[generate-config] Enabling cron scheduler"
+jq '.cron.enabled = true | .cron.store = "/data/.openclaw/cron/jobs.json" | .cron.maxConcurrentRuns = 5' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+mkdir -p /data/.openclaw/cron
+
 # Add gateway auth token and trust localhost proxy (Mission Control)
 echo "[generate-config] Adding gateway.auth.token to config"
 jq --arg token "$OPENCLAW_GATEWAY_TOKEN" '.gateway.auth.token = $token | .gateway.auth.mode = "token" | .gateway.trustedProxies = ["127.0.0.1"] | .gateway.controlUi.allowedOrigins = ["http://127.0.0.1:3333"]' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"

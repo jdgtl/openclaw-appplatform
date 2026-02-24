@@ -175,9 +175,14 @@ export function cronRouter(gateway: GatewayClient): Router {
     if (job.wakeMode) gatewayJob.wakeMode = job.wakeMode;
     if (job.model) gatewayJob.model = job.model;
 
-    // Schedule: accept string, {kind:"cron",expr}, or {kind:"every",value,unit}
+    // Schedule: convert to gateway format
+    // Gateway expects {kind:"every", everyMs:N} or {kind:"cron", expr:"..."}
     if (typeof job.schedule === "string") {
       gatewayJob.schedule = { kind: "cron", expr: job.schedule };
+    } else if (job.schedule?.kind === "every" && job.schedule.value && job.schedule.unit) {
+      const multipliers: Record<string, number> = { minutes: 60_000, hours: 3_600_000, days: 86_400_000 };
+      const everyMs = Number(job.schedule.value) * (multipliers[job.schedule.unit] ?? 60_000);
+      gatewayJob.schedule = { kind: "every", everyMs };
     } else {
       gatewayJob.schedule = job.schedule;
     }
