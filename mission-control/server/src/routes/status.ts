@@ -64,6 +64,8 @@ export function statusRouter(gateway: GatewayClient): Router {
 
     const agentModel = extractAgentModel(configVal);
 
+    const heartbeatInterval = extractHeartbeatInterval(configVal);
+
     const data = {
       agent: {
         name: agentName,
@@ -74,6 +76,7 @@ export function statusRouter(gateway: GatewayClient): Router {
       sessions: sessionsData,
       heartbeat:
         heartbeat.status === "fulfilled" ? heartbeat.value : null,
+      heartbeatInterval,
       channels: configVal
         ? extractChannels(configVal)
         : null,
@@ -113,6 +116,16 @@ function extractAgentModel(config: Record<string, unknown> | null): string | nul
     if (typeof m.primary === "string") return m.primary;
   }
   return null;
+}
+
+function extractHeartbeatInterval(config: Record<string, unknown> | null): string | null {
+  if (!config) return null;
+  const agents = config.agents as Record<string, unknown> | undefined;
+  const defaults = agents?.defaults as Record<string, unknown> | undefined;
+  const heartbeat = defaults?.heartbeat as Record<string, unknown> | undefined;
+  const every = heartbeat?.every as string | undefined;
+  if (!every || every === "0m" || every === "0") return null;
+  return every;
 }
 
 function extractChannels(
