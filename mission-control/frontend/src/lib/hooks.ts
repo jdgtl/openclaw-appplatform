@@ -6,10 +6,13 @@ import { mcWs } from "./ws-client.js";
 export function usePolling<T>(
   path: string,
   intervalMs: number = 30_000,
-): { data: T | null; error: string | null; loading: boolean } {
+): { data: T | null; error: string | null; loading: boolean; refetch: () => void } {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
+
+  const refetch = useCallback(() => setTick((t) => t + 1), []);
 
   useEffect(() => {
     let active = true;
@@ -36,9 +39,9 @@ export function usePolling<T>(
       active = false;
       clearInterval(id);
     };
-  }, [path, intervalMs]);
+  }, [path, intervalMs, tick]);
 
-  return { data, error, loading };
+  return { data, error, loading, refetch };
 }
 
 // WebSocket-based chat with the agent via persistent connection

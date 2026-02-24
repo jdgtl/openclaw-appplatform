@@ -33,7 +33,14 @@ function normalizeJob(raw: Record<string, unknown>): NormalizedJob {
   if (typeof schedule === "string") {
     scheduleStr = schedule;
   } else if (schedule?.kind === "every") {
-    scheduleStr = `Every ${schedule.value} ${schedule.unit}`;
+    const ms = schedule.everyMs as number | undefined;
+    if (ms) {
+      if (ms >= 86_400_000) scheduleStr = `Every ${ms / 86_400_000}d`;
+      else if (ms >= 3_600_000) scheduleStr = `Every ${ms / 3_600_000}h`;
+      else scheduleStr = `Every ${ms / 60_000}m`;
+    } else {
+      scheduleStr = `Every ${schedule.value ?? "?"} ${schedule.unit ?? ""}`.trim();
+    }
     scheduleKind = "every";
   } else if (typeof schedule === "object" && schedule?.expr) {
     scheduleStr = schedule.expr as string;

@@ -41,7 +41,7 @@ interface CronResponse {
 }
 
 export function Cron() {
-  const { data, loading } = usePolling<CronResponse>("/cron", 30_000);
+  const { data, loading, refetch } = usePolling<CronResponse>("/cron", 30_000);
   const jobs = data?.jobs ?? [];
   const [showAdd, setShowAdd] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -65,23 +65,25 @@ export function Cron() {
     setActionLoading(job.id);
     try {
       await postJSON(`/cron/${job.id}/toggle`, { enabled: !job.enabled });
+      refetch();
     } catch {
       // ignore
     } finally {
       setActionLoading(null);
     }
-  }, []);
+  }, [refetch]);
 
   const handleRun = useCallback(async (id: string) => {
     setActionLoading(id);
     try {
       await postJSON(`/cron/${id}/run`, {});
+      refetch();
     } catch {
       // ignore
     } finally {
       setActionLoading(null);
     }
-  }, []);
+  }, [refetch]);
 
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return;
@@ -89,12 +91,13 @@ export function Cron() {
     try {
       await deleteJSON(`/cron/${deleteTarget}`);
       setDeleteTarget(null);
+      refetch();
     } catch {
       // ignore
     } finally {
       setActionLoading(null);
     }
-  }, [deleteTarget]);
+  }, [deleteTarget, refetch]);
 
   if (loading && !data) {
     return (
@@ -243,7 +246,7 @@ export function Cron() {
       />
 
       {/* Add Job Modal */}
-      {showAdd && <AddJobModal onClose={() => setShowAdd(false)} />}
+      {showAdd && <AddJobModal onClose={() => { setShowAdd(false); refetch(); }} />}
     </PageShell>
   );
 }
