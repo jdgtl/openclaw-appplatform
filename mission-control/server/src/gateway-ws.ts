@@ -76,9 +76,9 @@ export class GatewayWS extends EventEmitter {
   async connect(): Promise<void> {
     if (this.connected) return;
     return new Promise((resolve, reject) => {
-      // Set origin to the gateway's own address so it passes origin checks
+      // Set origin to MC's own address (must be in gateway.controlUi.allowedOrigins)
       const ws = new WebSocket(this.url, {
-        origin: this.url.replace("ws://", "http://").replace("wss://", "https://"),
+        origin: "http://127.0.0.1:3333",
       });
       this.ws = ws;
 

@@ -259,7 +259,15 @@ mkdir -p /data/.openclaw/cron
 
 # Add gateway auth token and trust localhost proxy (Mission Control)
 echo "[generate-config] Adding gateway.auth.token to config"
-jq --arg token "$OPENCLAW_GATEWAY_TOKEN" '.gateway.auth.token = $token | .gateway.auth.mode = "token" | .gateway.trustedProxies = ["127.0.0.1"] | .gateway.controlUi.allowedOrigins = ["http://127.0.0.1:3333"]' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+# Build allowedOrigins: MC localhost + Tailscale HTTPS origins (for browser Control UI access)
+ALLOWED_ORIGINS='["http://127.0.0.1:3333"'
+if [ -n "$STABLE_HOSTNAME" ]; then
+  TS_FQDN="${STABLE_HOSTNAME}.taila801b3.ts.net"
+  ALLOWED_ORIGINS="${ALLOWED_ORIGINS}, \"https://${TS_FQDN}\", \"https://${TS_FQDN}:3333\""
+  echo "[generate-config] Adding Tailscale origins: https://${TS_FQDN}, https://${TS_FQDN}:3333"
+fi
+ALLOWED_ORIGINS="${ALLOWED_ORIGINS}]"
+jq --arg token "$OPENCLAW_GATEWAY_TOKEN" --argjson origins "$ALLOWED_ORIGINS" '.gateway.auth.token = $token | .gateway.auth.mode = "token" | .gateway.trustedProxies = ["127.0.0.1"] | .gateway.controlUi.allowedOrigins = $origins' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
 
 # Permissions applied via /etc/digitalocean/permissions.yaml
 
