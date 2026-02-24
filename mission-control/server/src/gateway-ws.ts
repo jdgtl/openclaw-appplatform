@@ -326,6 +326,26 @@ export class GatewayWS extends EventEmitter {
     await this.sendReq("chat.abort", { sessionKey });
   }
 
+  // List available tools/skills from the gateway
+  async listTools(): Promise<{ name: string; description?: string; type?: string }[]> {
+    try {
+      const result = await this.sendReq("tools.list", {});
+      const tools = (result.tools ?? result.items ?? []) as
+        { name: string; description?: string; type?: string }[];
+      return tools;
+    } catch {
+      // Fallback: try skills.list
+      try {
+        const result = await this.sendReq("skills.list", {});
+        const skills = (result.skills ?? result.items ?? []) as
+          { name: string; description?: string; type?: string }[];
+        return skills;
+      } catch {
+        return [];
+      }
+    }
+  }
+
   get isConnected(): boolean {
     return this.connected;
   }

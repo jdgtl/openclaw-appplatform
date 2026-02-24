@@ -31,7 +31,7 @@ import {
 interface UnifiedSkill {
   name: string;
   description: string;
-  source: "custom" | "built-in";
+  source: "custom" | "built-in" | "native";
   category: string;
   modified: string | null;
   usageCount: number;
@@ -393,7 +393,7 @@ function SkillBentoCard({
         </span>
         <div className="flex items-center gap-1.5">
           <span className="text-[9px] text-text-faint uppercase">
-            {skill.source === "custom" ? "Custom" : "Built-in"}
+            {skill.source === "custom" ? "Custom" : skill.source === "native" ? "Native" : "Built-in"}
           </span>
           <StatusDot status={skill.usageCount > 0 ? "active" : "idle"} size={5} />
         </div>
@@ -456,7 +456,7 @@ function SkillListCard({
       )}
       <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
         <span className="text-[10px] text-text-faint">
-          {skill.source === "custom" ? "Custom" : "Built-in"}
+          {skill.source === "custom" ? "Custom" : skill.source === "native" ? "Native" : "Built-in"}
         </span>
         {skill.usageCount > 0 && (
           <span className="text-[10px] font-semibold tabular-nums" style={{ color: cat.color }}>
@@ -522,7 +522,7 @@ function SkillDetailModal({
             {skill.category}
           </span>
           <span className="text-[10px] text-text-faint uppercase">
-            {skill.source === "custom" ? "Custom Skill" : "Built-in"}
+            {skill.source === "custom" ? "Custom Skill" : skill.source === "native" ? "Native Tool" : "Built-in"}
           </span>
           <div className="flex items-center gap-1.5 ml-auto">
             <Zap size={10} style={{ color: cat.color }} />

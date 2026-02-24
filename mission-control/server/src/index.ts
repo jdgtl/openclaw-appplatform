@@ -51,7 +51,7 @@ app.use("/api/cron", cronRouter(gateway));
 app.use("/api/system", systemRouter(gateway));
 app.use("/api/config", configRouter(gateway));
 app.use("/api/workspace", workspaceRouter());
-app.use("/api/skills", skillsRouter());
+app.use("/api/skills", skillsRouter(gatewayWs));
 app.use("/api/usage", usageRouter());
 app.use("/api/tasks", tasksRouter());
 
