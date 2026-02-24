@@ -277,12 +277,10 @@ _add_ts_origin() {
   ALLOWED_ORIGINS="${ALLOWED_ORIGINS}, \"https://${fqdn}\", \"https://${fqdn}:3333\""
   echo "[generate-config] Adding Tailscale origins: https://${fqdn}, https://${fqdn}:3333"
 }
-# Try reading actual TS hostname from persisted state (available after backup restore)
-if [ -f /data/tailscale/tailscaled.state ]; then
-  TS_ACTUAL=$(jq -r '.Config.Hostname // empty' /data/tailscale/tailscaled.state 2>/dev/null || true)
-  [ -z "$TS_ACTUAL" ] && TS_ACTUAL=$(strings /data/tailscale/tailscaled.state 2>/dev/null | grep -oP '"Hostname":"[^"]+"' | head -1 | cut -d'"' -f4 || true)
-  _add_ts_origin "$TS_ACTUAL"
-fi
+# Extract worker name from container hostname (e.g. clawdius-6fd984dcd9-hflkx → clawdius)
+# On DO App Platform this matches the Tailscale hostname
+WORKER_NAME=$(hostname | sed 's/-[a-f0-9]*-[a-z0-9]*$//')
+_add_ts_origin "$WORKER_NAME"
 # Also add TS_HOSTNAME (from env/persist) and STABLE_HOSTNAME as fallbacks
 _add_ts_origin "${TS_HOSTNAME:-}"
 _add_ts_origin "${STABLE_HOSTNAME:-}"
