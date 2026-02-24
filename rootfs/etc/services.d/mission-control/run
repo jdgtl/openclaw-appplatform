@@ -12,33 +12,43 @@ if [ "${MC_ENABLE:-false}" != "true" ]; then
   exit 0
 fi
 
-# Configure Tailscale Serve for HTTPS access (wait for Tailscale to be ready)
+# Persistent Tailscale serve watcher: the gateway's resetOnExit=true clears ALL
+# serve rules whenever the gateway restarts. This background loop ensures MC's
+# serve rule is re-added whenever it disappears.
 if [ "${TAILSCALE_ENABLE:-false}" = "true" ] && command -v tailscale >/dev/null 2>&1; then
   MC_PORT="${MC_PORT:-3333}"
-  # Wait for the gateway to establish its tailscale serve rule first.
-  # The gateway sets resetOnExit=true which clears ALL serve rules on
-  # start/stop — if we add ours before the gateway is ready, it gets wiped.
   GATEWAY_PORT="${GATEWAY_PORT:-18789}"
   (
-    # Phase 1: wait for gateway's serve rule to appear (up to 120s)
+    # Initial wait: gateway must establish its serve rule first
     echo "[mission-control] Waiting for gateway tailscale serve on port $GATEWAY_PORT..."
     for i in $(seq 1 120); do
       if tailscale serve status 2>/dev/null | grep -q "$GATEWAY_PORT"; then
-        echo "[mission-control] Gateway serve detected, adding MC serve rule"
+        echo "[mission-control] Gateway serve detected"
         break
       fi
       [ "$i" -eq 120 ] && echo "[mission-control] WARNING: Gateway serve not detected after 120s, trying anyway"
       sleep 1
     done
-    # Phase 2: add MC serve rule (retry up to 30s in case of transient errors)
-    for i in $(seq 1 30); do
-      if tailscale serve --bg --https="$MC_PORT" "http://127.0.0.1:$MC_PORT" 2>/dev/null; then
-        echo "[mission-control] Tailscale HTTPS serve configured on port $MC_PORT"
-        exit 0
+
+    # Persistent loop: check every 10s, re-add if missing
+    while true; do
+      if ! tailscale serve status 2>/dev/null | grep -q "$MC_PORT"; then
+        echo "[mission-control] Serve rule missing, re-adding on port $MC_PORT..."
+        # Wait for gateway's rule to be present before adding ours
+        for j in $(seq 1 30); do
+          if tailscale serve status 2>/dev/null | grep -q "$GATEWAY_PORT"; then
+            break
+          fi
+          sleep 1
+        done
+        if tailscale serve --bg --https="$MC_PORT" "http://127.0.0.1:$MC_PORT" 2>/dev/null; then
+          echo "[mission-control] Tailscale HTTPS serve restored on port $MC_PORT"
+        else
+          echo "[mission-control] WARNING: Failed to restore Tailscale serve rule"
+        fi
       fi
-      sleep 1
+      sleep 10
     done
-    echo "[mission-control] WARNING: Failed to configure Tailscale serve after retries"
   ) &
 fi
 
