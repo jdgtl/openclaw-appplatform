@@ -104,7 +104,7 @@ export class GatewayWS extends EventEmitter {
               instanceId: randomUUID(),
             },
             caps: [],
-            auth: { token: this.token },
+            auth: { token: this.token, password: this.token },
             role: "operator",
             scopes: ["operator.admin"],
           },
