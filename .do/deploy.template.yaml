@@ -132,6 +132,11 @@ spec:
           scope: RUN_TIME
           type: SECRET
 
+        # Mailchimp API
+        - key: MAILCHIMP_API_KEY
+          scope: RUN_TIME
+          type: SECRET
+
         # Heartbeat config (set to "30m" or "1h" to activate)
         - key: HEARTBEAT_INTERVAL
           scope: RUN_TIME
