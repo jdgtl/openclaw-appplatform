@@ -239,6 +239,32 @@ jq --arg interval "$HEARTBEAT_INTERVAL" \
     "session": "main"
   }' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
 
+# Add memory search, context pruning, and compaction (memory flush) config
+echo "[generate-config] Adding memory search and compaction config"
+jq '
+  .memorySearch = {
+    "enabled": true,
+    "sources": ["memory"],
+    "provider": "auto",
+    "sync": {
+      "watch": true,
+      "onSessionStart": true,
+      "onSearch": true
+    }
+  }
+  | .contextPruning = {
+    "mode": "cache-ttl",
+    "ttl": "6h",
+    "keepLastAssistants": 3
+  }
+  | .compaction.memoryFlush = {
+    "enabled": true,
+    "softThresholdTokens": 40000,
+    "prompt": "Distill this session to memory/YYYY-MM-DD.md. Focus on decisions, state changes, lessons, blockers. If nothing worth storing: NO_FLUSH",
+    "systemPrompt": "Extract only what is worth remembering. No fluff."
+  }
+' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+
 # Seed HEARTBEAT.md if it doesn't exist (agent can customize later via chat)
 HEARTBEAT_MD="$OPENCLAW_WORKSPACE_DIR/HEARTBEAT.md"
 if [ ! -f "$HEARTBEAT_MD" ]; then
@@ -252,6 +278,37 @@ HBEOF
   chown openclaw:openclaw "$HEARTBEAT_MD"
   echo "[generate-config] Created default HEARTBEAT.md"
 fi
+
+# Seed MEMORY.md if it doesn't exist
+MEMORY_MD="$OPENCLAW_WORKSPACE_DIR/MEMORY.md"
+if [ ! -f "$MEMORY_MD" ]; then
+  cat > "$MEMORY_MD" <<'MEMEOF'
+# Memory
+
+Use this file to record important context, decisions, and lessons learned.
+MEMEOF
+  chown openclaw:openclaw "$MEMORY_MD"
+  echo "[generate-config] Created default MEMORY.md"
+fi
+
+# Seed IDENTITY.md if it doesn't exist
+IDENTITY_MD="$OPENCLAW_WORKSPACE_DIR/IDENTITY.md"
+if [ ! -f "$IDENTITY_MD" ]; then
+  cat > "$IDENTITY_MD" <<'IDEOF'
+# Identity
+
+**Name:** Agent
+**Role:** AI Assistant
+
+You are a helpful AI assistant.
+IDEOF
+  chown openclaw:openclaw "$IDENTITY_MD"
+  echo "[generate-config] Created default IDENTITY.md"
+fi
+
+# Ensure memory subdirectory exists for auto-generated memory files
+mkdir -p "$OPENCLAW_WORKSPACE_DIR/memory"
+chown openclaw:openclaw "$OPENCLAW_WORKSPACE_DIR/memory"
 
 # Enable cron scheduler (required for cron tool add/update/remove to work)
 echo "[generate-config] Enabling cron scheduler"
