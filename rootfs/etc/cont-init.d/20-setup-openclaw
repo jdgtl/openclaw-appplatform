@@ -239,6 +239,10 @@ jq --arg interval "$HEARTBEAT_INTERVAL" \
     "session": "main"
   }' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
 
+# Clean up stale top-level keys that may have been restored from backup
+# These were incorrectly placed at top-level in an earlier version and cause gateway crash loops
+jq 'del(.memorySearch, .contextPruning, .compaction)' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+
 # Add memory search, context pruning, and compaction (memory flush) config
 # These must live under agents.defaults — top-level keys are rejected by OpenClaw 2026.2.24+
 echo "[generate-config] Adding memory search and compaction config"
