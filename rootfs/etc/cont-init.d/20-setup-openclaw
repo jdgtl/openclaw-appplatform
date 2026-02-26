@@ -250,7 +250,7 @@ jq '
   .agents.defaults.memorySearch = {
     "enabled": true,
     "sources": ["memory"],
-    "provider": "auto",
+    "provider": "openai",
     "sync": {
       "watch": true,
       "onSessionStart": true,
