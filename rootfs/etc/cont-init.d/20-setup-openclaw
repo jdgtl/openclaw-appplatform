@@ -240,9 +240,10 @@ jq --arg interval "$HEARTBEAT_INTERVAL" \
   }' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
 
 # Add memory search, context pruning, and compaction (memory flush) config
+# These must live under agents.defaults — top-level keys are rejected by OpenClaw 2026.2.24+
 echo "[generate-config] Adding memory search and compaction config"
 jq '
-  .memorySearch = {
+  .agents.defaults.memorySearch = {
     "enabled": true,
     "sources": ["memory"],
     "provider": "auto",
@@ -252,12 +253,12 @@ jq '
       "onSearch": true
     }
   }
-  | .contextPruning = {
+  | .agents.defaults.contextPruning = {
     "mode": "cache-ttl",
     "ttl": "6h",
     "keepLastAssistants": 3
   }
-  | .compaction.memoryFlush = {
+  | .agents.defaults.compaction.memoryFlush = {
     "enabled": true,
     "softThresholdTokens": 40000,
     "prompt": "Distill this session to memory/YYYY-MM-DD.md. Focus on decisions, state changes, lessons, blockers. If nothing worth storing: NO_FLUSH",
