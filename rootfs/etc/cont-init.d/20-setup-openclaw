@@ -109,7 +109,7 @@ if [ -n "${OPENCLAW_AUTO_UPDATE}" ] && [ "${OPENCLAW_AUTO_UPDATE}" != "false" ];
     TARGET_VER="${OPENCLAW_AUTO_UPDATE}"
   fi
   echo "[generate-config] Auto-update enabled: current=$CURRENT_VER, target=$TARGET_VER"
-  if su - openclaw -c "source \$HOME/.profile && pnpm add -g openclaw@${TARGET_VER}" 2>&1; then
+  if su - openclaw -c "source \$HOME/.profile && HTTP_PROXY= HTTPS_PROXY= NO_PROXY= pnpm add -g openclaw@${TARGET_VER}" 2>&1; then
     echo "[generate-config] OpenClaw updated successfully"
   else
     echo "[generate-config] WARNING: OpenClaw update failed, continuing with installed version" >&2
