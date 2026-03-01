@@ -28,6 +28,10 @@ spec:
         - key: OPENCLAW_AUTO_UPDATE
           scope: RUN_TIME
           value: "true"
+        # Allow pnpm hardlinked plugin manifests (required for pnpm global installs)
+        - key: OPENCLAW_PLUGIN_ALLOW_HARDLINKS
+          scope: RUN_TIME
+          value: "true"
 
         # Feature flags
         - key: ENABLE_NGROK
