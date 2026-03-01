@@ -24,6 +24,11 @@ spec:
           scope: RUN_TIME
           value: openclaw
 
+        # Auto-update OpenClaw on container start (set to "true"/"latest" or a version like "2026.2.26")
+        - key: OPENCLAW_AUTO_UPDATE
+          scope: RUN_TIME
+          value: "true"
+
         # Feature flags
         - key: ENABLE_NGROK
           scope: RUN_TIME
