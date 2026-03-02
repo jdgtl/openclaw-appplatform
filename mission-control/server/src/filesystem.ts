@@ -240,11 +240,16 @@ export async function aggregateUsage(days: number = 7): Promise<UsageSummary> {
 
   try {
     const files = await readdir(sessionsDir);
-    const jsonlFiles = files
-      .filter((f) => f.endsWith(".jsonl"))
-      .sort()
-      .reverse()
-      .slice(0, 50);
+    const jsonlFiles = files.filter((f) => {
+      if (!f.endsWith(".jsonl")) return false;
+      // Pre-filter by filename timestamp to skip files entirely outside the window
+      const tsMatch = f.match(/(\d{13})/);
+      if (tsMatch) {
+        const fileDate = new Date(parseInt(tsMatch[1]));
+        if (fileDate < cutoff) return false;
+      }
+      return true;
+    });
 
     for (const file of jsonlFiles) {
       try {
@@ -422,11 +427,15 @@ export async function aggregateSkillUsage(days: number = 30): Promise<SkillUsage
 
   try {
     const files = await readdir(sessionsDir);
-    const jsonlFiles = files
-      .filter((f) => f.endsWith(".jsonl"))
-      .sort()
-      .reverse()
-      .slice(0, 50);
+    const jsonlFiles = files.filter((f) => {
+      if (!f.endsWith(".jsonl")) return false;
+      const tsMatch = f.match(/(\d{13})/);
+      if (tsMatch) {
+        const fileDate = new Date(parseInt(tsMatch[1]));
+        if (fileDate < cutoff) return false;
+      }
+      return true;
+    });
 
     for (const file of jsonlFiles) {
       try {
