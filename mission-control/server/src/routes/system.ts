@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { readHeartbeat } from "../filesystem.js";
 import type { GatewayClient } from "../gateway.js";
 
@@ -45,8 +45,11 @@ export function systemRouter(gateway: GatewayClient): Router {
   router.post("/restart", async (_req, res) => {
     try {
       await new Promise<void>((resolve, reject) => {
-        exec(
-          "pkill -u openclaw -f 'openclaw gateway'",
+        // Use execFile (no intermediate shell) so pkill doesn't accidentally
+        // kill its own parent /bin/sh whose cmdline also contains "openclaw gateway".
+        execFile(
+          "pkill",
+          ["-u", "openclaw", "-f", "openclaw gateway"],
           { timeout: 5_000 },
           (error, _stdout, stderr) => {
             // pkill exit 1 = no process matched — treat as success
