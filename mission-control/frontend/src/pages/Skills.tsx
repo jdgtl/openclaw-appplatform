@@ -505,7 +505,7 @@ function SkillDetailModal({
     setSaving(true);
     try {
       await putJSON(`/skills/${encodeURIComponent(skill.name)}`, { content });
-      setOriginalContent(content);
+      onClose();
     } catch { /* ignore */ }
     finally { setSaving(false); }
   };
