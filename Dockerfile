@@ -70,6 +70,8 @@ RUN set -eux; \
   cron \
   build-essential \
   procps \
+  lsof \
+  psmisc \
   xz-utils; \
   # Install restic
   RESTIC_ARCH="$( [ "$TARGETARCH" = "arm64" ] && echo arm64 || echo amd64 )"; \

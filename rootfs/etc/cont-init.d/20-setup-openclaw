@@ -37,7 +37,6 @@ persist_env_var OPENCLAW_ \
   TS_STATE_DIR="${TS_STATE_DIR}" \
   TS_USERSPACE="${TS_USERSPACE}" \
   OPENCLAW_AUTO_UPDATE="${OPENCLAW_AUTO_UPDATE:-false}" \
-  OPENCLAW_PLUGIN_ALLOW_HARDLINKS="${OPENCLAW_PLUGIN_ALLOW_HARDLINKS:-true}" \
   OPENCLAW_STATE_DIR=/data/.openclaw \
   OPENCLAW_WORKSPACE_DIR=/data/workspace
 
@@ -110,7 +109,7 @@ if [ -n "${OPENCLAW_AUTO_UPDATE}" ] && [ "${OPENCLAW_AUTO_UPDATE}" != "false" ];
     TARGET_VER="${OPENCLAW_AUTO_UPDATE}"
   fi
   echo "[generate-config] Auto-update enabled: current=$CURRENT_VER, target=$TARGET_VER"
-  if su - openclaw -c "source \$HOME/.profile && HTTP_PROXY= HTTPS_PROXY= NO_PROXY= pnpm add -g openclaw@${TARGET_VER}" 2>&1; then
+  if su - openclaw -c "source \$HOME/.profile && HTTP_PROXY= HTTPS_PROXY= NO_PROXY= pnpm add -g openclaw@${TARGET_VER} --package-import-method=copy" 2>&1; then
     echo "[generate-config] OpenClaw updated successfully"
   else
     echo "[generate-config] WARNING: OpenClaw update failed, continuing with installed version" >&2
