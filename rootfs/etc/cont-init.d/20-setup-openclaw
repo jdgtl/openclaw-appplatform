@@ -250,6 +250,10 @@ fi
 echo "[generate-config] Setting agent timeout to 600s"
 jq '.agents.defaults.timeoutSeconds = 600' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
 
+# Tools profile: "full" enables all tools including MCPorter/MCP
+echo "[generate-config] Setting tools profile to full"
+jq '.tools.profile = "full"' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+
 # Add heartbeat config (disabled by default — set HEARTBEAT_INTERVAL to "30m" or "1h" to activate)
 HEARTBEAT_INTERVAL="${HEARTBEAT_INTERVAL:-0m}"
 echo "[generate-config] Adding heartbeat config (interval: $HEARTBEAT_INTERVAL)"
