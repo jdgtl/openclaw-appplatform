@@ -142,6 +142,20 @@ spec:
           scope: RUN_TIME
           type: SECRET
 
+        # eBay Sell API (used by ebay-mcp MCP server)
+        - key: EBAY_CLIENT_ID
+          scope: RUN_TIME
+          type: SECRET
+        - key: EBAY_CLIENT_SECRET
+          scope: RUN_TIME
+          type: SECRET
+        - key: EBAY_ENVIRONMENT
+          scope: RUN_TIME
+          value: "production"
+        - key: EBAY_REDIRECT_URI
+          scope: RUN_TIME
+          type: SECRET
+
         # Heartbeat config (set to "30m" or "1h" to activate)
         - key: HEARTBEAT_INTERVAL
           scope: RUN_TIME
