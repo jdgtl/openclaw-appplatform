@@ -155,6 +155,9 @@ spec:
         - key: EBAY_REDIRECT_URI
           scope: RUN_TIME
           type: SECRET
+        - key: EBAY_USER_REFRESH_TOKEN
+          scope: RUN_TIME
+          type: SECRET
 
         # Heartbeat config (set to "30m" or "1h" to activate)
         - key: HEARTBEAT_INTERVAL

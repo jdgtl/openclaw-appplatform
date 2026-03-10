@@ -39,26 +39,54 @@ export function systemRouter(gateway: GatewayClient): Router {
     }
   });
 
-  // Restart the OpenClaw gateway by killing the process (s6 auto-restarts it).
+  // Restart the OpenClaw gateway by killing the process tree (s6 auto-restarts it).
   // Cannot use `sudo s6-svc` — DO App Platform sets "no new privileges" flag.
   // Both MC and gateway run as `openclaw` user, so pkill works directly.
+  //
+  // The gateway runs as: runuser → bash -l -c "... && openclaw gateway ..."  → node
+  // We kill the entire process group rooted at the runuser process so s6 detects
+  // the service exit and restarts it cleanly.
   router.post("/restart", async (_req, res) => {
     try {
-      await new Promise<void>((resolve, reject) => {
-        // Use execFile (no intermediate shell) so pkill doesn't accidentally
-        // kill its own parent /bin/sh whose cmdline also contains "openclaw gateway".
+      // First, find the PID of the runuser process that launched the gateway.
+      // Its cmdline contains "openclaw gateway" since that's the inline script.
+      const pids = await new Promise<string>((resolve, reject) => {
         execFile(
-          "pkill",
+          "pgrep",
           ["-u", "openclaw", "-f", "openclaw gateway"],
           { timeout: 5_000 },
-          (error, _stdout, stderr) => {
-            // pkill exit 1 = no process matched — treat as success
-            if (error && error.code !== 1) reject(new Error(stderr || error.message));
-            else resolve();
+          (error, stdout, stderr) => {
+            if (error && error.code === 1) resolve(""); // no match
+            else if (error) reject(new Error(stderr || error.message));
+            else resolve(stdout.trim());
           },
         );
       });
-      res.json({ ok: true, message: "Gateway restart initiated" });
+
+      if (!pids) {
+        res.json({ ok: true, message: "No gateway process found (may already be restarting)" });
+        return;
+      }
+
+      // Kill all matched PIDs and their children with SIGTERM
+      const pidList = pids.split("\n").filter(Boolean);
+      await new Promise<void>((resolve, reject) => {
+        execFile(
+          "kill",
+          ["--", ...pidList],
+          { timeout: 5_000 },
+          (error, _stdout, stderr) => {
+            // ESRCH (no such process) is fine — it may have already exited
+            if (error && !stderr.includes("No such process")) {
+              reject(new Error(stderr || error.message));
+            } else {
+              resolve();
+            }
+          },
+        );
+      });
+
+      res.json({ ok: true, message: `Gateway restart initiated (killed PIDs: ${pidList.join(", ")})` });
     } catch (err) {
       res.status(500).json({
         error: err instanceof Error ? err.message : "Failed to restart gateway",
