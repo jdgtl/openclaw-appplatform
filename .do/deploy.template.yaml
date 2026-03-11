@@ -142,6 +142,11 @@ spec:
           scope: RUN_TIME
           type: SECRET
 
+        # Firecrawl (web scraping, search, browser automation)
+        - key: FIRECRAWL_API_KEY
+          scope: RUN_TIME
+          type: SECRET
+
         # eBay Sell API (used by ebay-mcp MCP server)
         - key: EBAY_CLIENT_ID
           scope: RUN_TIME
