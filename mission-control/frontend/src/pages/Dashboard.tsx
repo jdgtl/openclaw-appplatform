@@ -2,6 +2,7 @@ import { PageShell } from "../components/PageShell.js";
 import { StatusDot } from "../components/StatusDot.js";
 import { AnimCounter } from "../components/AnimCounter.js";
 import { Sparkline } from "../components/Sparkline.js";
+import { CodexUsageCard } from "../components/CodexUsageCard.js";
 import { usePolling, useGatewayStatus } from "../lib/hooks.js";
 import { postJSON } from "../lib/api.js";
 import { useState, useMemo, useRef } from "react";
@@ -313,8 +314,8 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Row 3: Channels + Providers + System */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Row 3: Channels + Providers + System + Codex Usage */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Channels */}
         <div className="bg-card-bg border border-border rounded-xl p-5">
           <h3 className="text-sm font-semibold text-text mb-4">Channels</h3>
@@ -371,6 +372,9 @@ export function Dashboard() {
 
         {/* System */}
         <SystemCard sysInfo={sysInfo ?? null} heartbeat={data?.heartbeat ?? null} />
+
+        {/* Codex Usage */}
+        <CodexUsageCard />
       </div>
     </PageShell>
   );

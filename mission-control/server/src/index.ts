@@ -15,6 +15,7 @@ import { workspaceRouter } from "./routes/workspace.js";
 import { skillsRouter } from "./routes/skills.js";
 import { usageRouter } from "./routes/usage.js";
 import { tasksRouter } from "./routes/tasks.js";
+import { openaiUsageRouter } from "./routes/openai-usage.js";
 
 const port = parseInt(process.env.MC_PORT || "3333", 10);
 const gatewayPort = process.env.GATEWAY_PORT || "18789";
@@ -54,6 +55,7 @@ app.use("/api/workspace", workspaceRouter());
 app.use("/api/skills", skillsRouter(gatewayWs));
 app.use("/api/usage", usageRouter());
 app.use("/api/tasks", tasksRouter());
+app.use("/api/openai/usage", openaiUsageRouter());
 
 // Static files (frontend build output)
 const __dirname = dirname(fileURLToPath(import.meta.url));

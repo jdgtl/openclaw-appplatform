@@ -133,6 +133,17 @@ fi
 
 echo "[generate-config] OpenClaw version: $(openclaw --version 2>/dev/null || echo 'unknown')"
 
+# Create stable symlink to built-in skills (survives auto-updates)
+# The pnpm store path includes the version, so it breaks on every update.
+# This symlink gives agents a stable path: /data/.openclaw/builtin-skills/mcporter/SKILL.md
+PNPM_SKILLS=$(su - openclaw -c 'source $HOME/.profile && pnpm -g root 2>/dev/null')/openclaw/skills
+if [ -d "$PNPM_SKILLS" ]; then
+  ln -sfn "$PNPM_SKILLS" /data/.openclaw/builtin-skills
+  echo "[generate-config] Symlinked builtin-skills -> $PNPM_SKILLS"
+else
+  echo "[generate-config] WARNING: Could not find openclaw skills at pnpm global root"
+fi
+
 # Generate a gateway token if not provided
 if [ -z "$OPENCLAW_GATEWAY_TOKEN" ]; then
   OPENCLAW_GATEWAY_TOKEN=$(head -c 32 /dev/urandom | base64 | tr -d '=/+' | head -c 32)
