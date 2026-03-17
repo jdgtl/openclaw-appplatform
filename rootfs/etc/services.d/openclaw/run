@@ -7,6 +7,25 @@ echo "[openclaw] Starting openclaw gateway..."
 # Allow openclaw to use tailscale
 if [ "${TAILSCALE_ENABLE:-false}" = "true" ]; then
     tailscale set --operator=openclaw
+
+    # Populate /etc/hosts with tailnet peer IPs for MagicDNS resolution
+    # (userspace mode can't manage system DNS, so we scrape tailscale status)
+    tailscale status --json 2>/dev/null | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for peer in (data.get('Peer') or {}).values():
+    dns = peer.get('DNSName','').rstrip('.')
+    ips = peer.get('TailscaleIPs') or []
+    hostname = peer.get('HostName','')
+    if ips and dns:
+        print(f'{ips[0]} {dns} {hostname}')
+" 2>/dev/null | while read -r line; do
+        host=$(echo "$line" | awk '{print $2}')
+        if [ -n "$host" ] && ! grep -q "$host" /etc/hosts 2>/dev/null; then
+            echo "$line" >> /etc/hosts
+            echo "[openclaw]   Added hosts entry: $line"
+        fi
+    done
 fi
 
 with_env_prefix --user openclaw OPENCLAW_ -- openclaw gateway --allow-unconfigured --force
