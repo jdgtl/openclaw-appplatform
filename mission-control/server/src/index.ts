@@ -48,7 +48,7 @@ app.use(express.json({ limit: "5mb" }));
 // API routes
 app.use("/api/status", statusRouter(gateway));
 app.use("/api/sessions", sessionsRouter(gateway));
-app.use("/api/cron", cronRouter(gateway));
+app.use("/api/cron", cronRouter(gatewayWs));
 app.use("/api/system", systemRouter(gateway));
 app.use("/api/config", configRouter(gateway));
 app.use("/api/workspace", workspaceRouter());

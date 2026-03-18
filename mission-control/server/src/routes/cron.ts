@@ -1,6 +1,5 @@
 import { Router } from "express";
-import type { GatewayClient } from "../gateway.js";
-import { unwrapToolResult } from "../lib/unwrap.js";
+import type { GatewayWS } from "../gateway-ws.js";
 import { readConfig, readCronCategories, writeCronCategories } from "../filesystem.js";
 
 // Normalize a gateway cron job into a flat shape for the frontend
@@ -79,20 +78,18 @@ function normalizeJob(raw: Record<string, unknown>): NormalizedJob {
   };
 }
 
-export function cronRouter(gateway: GatewayClient): Router {
+export function cronRouter(gatewayWs: GatewayWS): Router {
   const router = Router();
 
   // List all cron jobs (merges local categories)
   router.get("/", async (_req, res) => {
     try {
       const [raw, categories] = await Promise.all([
-        gateway.invokeTool("cron", { action: "list" }),
+        gatewayWs.sendReq("cron.list", {}),
         readCronCategories(),
       ]);
-      const data = unwrapToolResult(raw) as { jobs?: Record<string, unknown>[] };
-      const jobs = (data?.jobs ?? []).map((j) => {
+      const jobs = ((raw.jobs ?? []) as Record<string, unknown>[]).map((j) => {
         const job = normalizeJob(j);
-        // Merge locally stored category
         if (categories[job.id]) job.category = categories[job.id];
         return job;
       });
@@ -109,7 +106,7 @@ export function cronRouter(gateway: GatewayClient): Router {
     try {
       const [config, sessionsRaw] = await Promise.allSettled([
         readConfig(),
-        gateway.invokeTool("sessions_list"),
+        gatewayWs.sendReq("sessions.list", {}),
       ]);
 
       const cfg =
@@ -134,7 +131,7 @@ export function cronRouter(gateway: GatewayClient): Router {
       // Active session keys
       const sessions: string[] = [];
       const sessData = sessionsRaw.status === "fulfilled"
-        ? unwrapToolResult(sessionsRaw.value) as { sessions?: { key: string }[] }
+        ? sessionsRaw.value as { sessions?: { key: string }[] }
         : null;
       if (sessData?.sessions) {
         for (const s of sessData.sessions) {
@@ -183,7 +180,6 @@ export function cronRouter(gateway: GatewayClient): Router {
     if (job.model) gatewayJob.model = job.model;
 
     // Schedule: convert to gateway format
-    // Gateway expects {kind:"every", everyMs:N} or {kind:"cron", expr:"..."}
     if (typeof job.schedule === "string") {
       gatewayJob.schedule = { kind: "cron", expr: job.schedule };
     } else if (job.schedule?.kind === "every" && job.schedule.value && job.schedule.unit) {
@@ -194,7 +190,7 @@ export function cronRouter(gateway: GatewayClient): Router {
       gatewayJob.schedule = job.schedule;
     }
 
-    // Payload — always set (gateway may require it)
+    // Payload
     const payloadKind = job.payloadKind ?? "agentTurn";
     if (payloadKind === "agentTurn") {
       gatewayJob.payload = { kind: "agentTurn", message: job.message || "" };
@@ -213,12 +209,8 @@ export function cronRouter(gateway: GatewayClient): Router {
     }
 
     try {
-      const raw = await gateway.invokeTool("cron", {
-        action: "add",
-        ...gatewayJob,
-      });
-      const data = unwrapToolResult(raw) as Record<string, unknown>;
-      const normalized = normalizeJob(data);
+      const raw = await gatewayWs.sendReq("cron.add", gatewayJob);
+      const normalized = normalizeJob(raw);
 
       // Save category locally (not a gateway concept)
       if (job.category && normalized.id) {
@@ -311,13 +303,11 @@ export function cronRouter(gateway: GatewayClient): Router {
     }
 
     try {
-      const raw = await gateway.invokeTool("cron", {
-        action: "update",
+      const raw = await gatewayWs.sendReq("cron.update", {
         jobId: req.params.id,
         patch,
       });
-      const data = unwrapToolResult(raw) as Record<string, unknown>;
-      const normalized = normalizeJob(data);
+      const normalized = normalizeJob(raw);
 
       // Update local category if provided
       if (job.category !== undefined) {
@@ -349,12 +339,11 @@ export function cronRouter(gateway: GatewayClient): Router {
     }
 
     try {
-      const result = await gateway.invokeTool("cron", {
-        action: "update",
+      const result = await gatewayWs.sendReq("cron.update", {
         jobId: req.params.id,
         patch: { enabled },
       });
-      res.json(unwrapToolResult(result));
+      res.json(result);
     } catch (err) {
       res.status(502).json({
         error: err instanceof Error ? err.message : "Failed to toggle cron job",
@@ -365,11 +354,10 @@ export function cronRouter(gateway: GatewayClient): Router {
   // Run a cron job immediately
   router.post("/:id/run", async (req, res) => {
     try {
-      const result = await gateway.invokeTool("cron", {
-        action: "run",
+      const result = await gatewayWs.sendReq("cron.run", {
         jobId: req.params.id,
       });
-      res.json(unwrapToolResult(result));
+      res.json(result);
     } catch (err) {
       res.status(502).json({
         error: err instanceof Error ? err.message : "Failed to run cron job",
@@ -380,8 +368,7 @@ export function cronRouter(gateway: GatewayClient): Router {
   // Delete a cron job
   router.delete("/:id", async (req, res) => {
     try {
-      const result = await gateway.invokeTool("cron", {
-        action: "remove",
+      const result = await gatewayWs.sendReq("cron.remove", {
         jobId: req.params.id,
       });
 
@@ -392,7 +379,7 @@ export function cronRouter(gateway: GatewayClient): Router {
         await writeCronCategories(categories);
       }
 
-      res.json(unwrapToolResult(result));
+      res.json(result);
     } catch (err) {
       res.status(502).json({
         error: err instanceof Error ? err.message : "Failed to delete cron job",

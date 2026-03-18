@@ -233,7 +233,7 @@ export class GatewayWS extends EventEmitter {
   }
 
   // Send a request and wait for the response
-  private sendReq(
+  sendReq(
     method: string,
     params: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
